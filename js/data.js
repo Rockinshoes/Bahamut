@@ -12,7 +12,8 @@ var GameData = (function () {
 
   // Three factions, like the original's Man / God / Demon. There is no damage weakness
   // between them. Each leans a different way, and cards matching the alignment you
-  // picked at the start get a bonus (CONFIG.alignmentBonus).
+  // picked at the start get a small bonus (CONFIG.alignmentBonus). Mortal cards cost 1 less,
+  // which matters because your party's total cost can't go over your ATK PWR.
   var FACTIONS = {
     mortal:   { name: 'Mortal',   icon: '⚔', color: '#5fbf7f', atkMod: 1.0,  hpMod: 1.0,  costMod: -1,
                 blurb: 'Balanced fighters. Cost 1 less in your party.' },
@@ -108,7 +109,7 @@ var GameData = (function () {
 
   // Balance knobs - change these to make the game easier or harder.
   var CONFIG = {
-    startGems: 1000,
+    startGems: 90,                   // enough for 3 single summons; earn more from first clears and level-ups
     startGold: 500,
     singlePullCost: 30,
     tenPullCost: 270,
@@ -124,17 +125,18 @@ var GameData = (function () {
     monsterDropChance: 0.2,          // chance a defeated monster drops a card
     chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
     leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and HP
-    alignmentBonus: 1.15,            // cards matching your alignment: +15% ATK and HP
+    alignmentBonus: 1.05,            // cards matching your alignment: +5% ATK and HP
     sameFactionFuseMult: 1.5,        // fusing a card of the same faction gives 1.5x exp
     pointsPerLevel: 3,               // attribute points you get on each level-up
+    pointsPerSectionClear: 1,        // and one more the first time you clear each section
     staminaPerPoint: 2,              // each Stamina point: +2 max stamina
-    atkPctPerPoint: 2,               // each ATK PWR point: +2% team ATK
-    hpPctPerPoint: 2,                // each DEF PWR point: +2% team HP
-    // Starting cards depend on the alignment you pick.
+    baseAtkPower: 12,                // ATK PWR = your party cost limit. You start at 12...
+    atkPowerPerPoint: 1,             // ...and each ATK PWR point adds 1
+    // The starter pack you get for picking an alignment: one champion of that faction.
     starterCards: {
-      mortal:   ['cinder-archer', 'reed-skirmisher', 'dawn-acolyte', 'breeze-pixie', 'brook-sprite'],
-      immortal: ['lantern-cleric', 'tide-caller', 'brook-sprite', 'dawn-acolyte', 'ember-imp'],
-      fallen:   ['gloom-thief', 'hollow-reaver', 'ember-imp', 'shade-whelp', 'dawn-acolyte']
+      mortal:   ['flame-warden'],
+      immortal: ['halo-seraph'],
+      fallen:   ['night-sorceress']
     }
   };
 

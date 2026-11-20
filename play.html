@@ -250,7 +250,8 @@ var GameData = (function () {
 
   // Three factions, like the original's Man / God / Demon. There is no damage weakness
   // between them. Each leans a different way, and cards matching the alignment you
-  // picked at the start get a bonus (CONFIG.alignmentBonus).
+  // picked at the start get a small bonus (CONFIG.alignmentBonus). Mortal cards cost 1 less,
+  // which matters because your party's total cost can't go over your ATK PWR.
   var FACTIONS = {
     mortal:   { name: 'Mortal',   icon: '⚔', color: '#5fbf7f', atkMod: 1.0,  hpMod: 1.0,  costMod: -1,
                 blurb: 'Balanced fighters. Cost 1 less in your party.' },
@@ -346,7 +347,7 @@ var GameData = (function () {
 
   // Balance knobs - change these to make the game easier or harder.
   var CONFIG = {
-    startGems: 1000,
+    startGems: 90,                   // enough for 3 single summons; earn more from first clears and level-ups
     startGold: 500,
     singlePullCost: 30,
     tenPullCost: 270,
@@ -362,17 +363,18 @@ var GameData = (function () {
     monsterDropChance: 0.2,          // chance a defeated monster drops a card
     chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
     leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and HP
-    alignmentBonus: 1.15,            // cards matching your alignment: +15% ATK and HP
+    alignmentBonus: 1.05,            // cards matching your alignment: +5% ATK and HP
     sameFactionFuseMult: 1.5,        // fusing a card of the same faction gives 1.5x exp
     pointsPerLevel: 3,               // attribute points you get on each level-up
+    pointsPerSectionClear: 1,        // and one more the first time you clear each section
     staminaPerPoint: 2,              // each Stamina point: +2 max stamina
-    atkPctPerPoint: 2,               // each ATK PWR point: +2% team ATK
-    hpPctPerPoint: 2,                // each DEF PWR point: +2% team HP
-    // Starting cards depend on the alignment you pick.
+    baseAtkPower: 12,                // ATK PWR = your party cost limit. You start at 12...
+    atkPowerPerPoint: 1,             // ...and each ATK PWR point adds 1
+    // The starter pack you get for picking an alignment: one champion of that faction.
     starterCards: {
-      mortal:   ['cinder-archer', 'reed-skirmisher', 'dawn-acolyte', 'breeze-pixie', 'brook-sprite'],
-      immortal: ['lantern-cleric', 'tide-caller', 'brook-sprite', 'dawn-acolyte', 'ember-imp'],
-      fallen:   ['gloom-thief', 'hollow-reaver', 'ember-imp', 'shade-whelp', 'dawn-acolyte']
+      mortal:   ['flame-warden'],
+      immortal: ['halo-seraph'],
+      fallen:   ['night-sorceress']
     }
   };
 
@@ -792,7 +794,8 @@ var Game = (function () {
   function maxStamina(level, bonus) { return Math.min(100, 20 + 2 * (level - 1) + (bonus || 0)); }
   function staminaCap(state) { return maxStamina(state.level, state.attr.stamina * CFG.staminaPerPoint); }
   function expToNext(level) { return 60 * level; }
-  function deckCostCap(level) { return 24 + 2 * level; }
+  // ATK PWR: the most total card cost your party can have.
+  function deckCostCap(state) { return CFG.baseAtkPower + state.attr.atk * CFG.atkPowerPerPoint; }
 
   // ---------- card stats ----------
   function maxLevel(card) { return 20 + 10 * card.evo; }
@@ -833,7 +836,7 @@ var Game = (function () {
       deck: [],
       cleared: {},          // section id -> true once the section has been cleared
       progress: {},         // section id -> total monsters beaten there
-      attr: { stamina: 0, atk: 0, hp: 0 },
+      attr: { stamina: 0, atk: 0 },
       attrPoints: 0,
       items: { cureWater: 0 },
       pulls: 0
@@ -894,13 +897,6 @@ var Game = (function () {
     return { ok: true };
   }
 
-  function teamBonus(state) {
-    return {
-      atk: 1 + state.attr.atk * CFG.atkPctPerPoint / 100,
-      hp: 1 + state.attr.hp * CFG.hpPctPerPoint / 100
-    };
-  }
-
   // ---------- summoning (gacha) ----------
   function rateTable() {
     var t = {};
@@ -946,15 +942,15 @@ var Game = (function () {
       seen[uids[i]] = true;
     }
     var cost = deckCost(state, uids);
-    var cap = deckCostCap(state.level);
-    if (cost > cap) { return { ok: false, error: 'Deck cost ' + cost + ' is over your limit of ' + cap + '.' }; }
+    var cap = deckCostCap(state);
+    if (cost > cap) { return { ok: false, error: 'Party cost ' + cost + ' is over your ATK PWR of ' + cap + '.' }; }
     state.deck = uids.slice();
     return { ok: true, cost: cost, cap: cap };
   }
 
   // The strongest legal party, by raw power.
   function bestDeck(state) {
-    var cap = deckCostCap(state.level), picked = [], total = 0;
+    var cap = deckCostCap(state), picked = [], total = 0;
     var byPower = state.cards.slice().sort(function (a, b) {
       var sa = cardStats(a), sb = cardStats(b);
       return (sb.atk + sb.hp / 4) - (sa.atk + sa.hp / 4);
@@ -1145,7 +1141,6 @@ var Game = (function () {
   // Turns your party cards into battle units. The first card is the leader, and cards
   // matching your alignment get the alignment bonus.
   function buildTeam(state, uids) {
-    var bonus = teamBonus(state);
     return uids.map(function (uid, i) {
       var c = findCard(state, uid);
       var def = D.CARD_BY_ID[c.cardId];
@@ -1153,11 +1148,11 @@ var Game = (function () {
       var lead = (i === 0) ? CFG.leaderMult : 1;
       var aligned = def.faction === state.alignment;
       var align = aligned ? CFG.alignmentBonus : 1;
-      var hp = Math.round(s.hp * lead * align * bonus.hp);
+      var hp = Math.round(s.hp * lead * align);
       return {
         name: def.name, faction: def.faction, look: def.look, cardId: def.id, rarity: def.rarity, style: def.style,
         level: c.level, evo: c.evo, leader: i === 0, aligned: aligned,
-        atk: Math.round(s.atk * lead * align * bonus.atk), hp: hp, maxHp: hp
+        atk: Math.round(s.atk * lead * align), hp: hp, maxHp: hp
       };
     });
   }
@@ -1260,7 +1255,7 @@ var Game = (function () {
       exp: stage.staminaCost * 5,
       gold: stage.boss ? 150 + 60 * gi : 12 + 6 * gi,
       gems: 0, cards: [], chest: false, chestGold: 0, cureWater: 0,
-      levelsGained: 0, firstClear: false, sectionCleared: false
+      levelsGained: 0, firstClear: false, sectionCleared: false, points: 0
     };
 
     state.progress[stage.id] = (state.progress[stage.id] || 0) + 1;
@@ -1286,6 +1281,8 @@ var Game = (function () {
       rewards.sectionCleared = true;
       rewards.firstClear = true;
       rewards.gems = stage.boss ? CFG.firstClearBossGems : CFG.firstClearGems;
+      rewards.points = CFG.pointsPerSectionClear;
+      state.attrPoints += rewards.points;
     }
 
     state.gold += rewards.gold + rewards.chestGold;
@@ -1323,9 +1320,12 @@ var Game = (function () {
     ['cleared', 'progress', 'attr', 'items'].forEach(function (key) {
       if (!out[key] || typeof out[key] !== 'object' || Array.isArray(out[key])) { out[key] = base[key]; }
     });
-    ['stamina', 'atk', 'hp'].forEach(function (key) {
+    ['stamina', 'atk'].forEach(function (key) {
       if (typeof out.attr[key] !== 'number' || !isFinite(out.attr[key])) { out.attr[key] = 0; }
     });
+    // DEF PWR (attr.hp) was removed; give those points back to spend again.
+    if (typeof out.attr.hp === 'number' && out.attr.hp > 0) { out.attrPoints += out.attr.hp; }
+    delete out.attr.hp;
     if (typeof out.items.cureWater !== 'number' || !isFinite(out.items.cureWater)) { out.items.cureWater = 0; }
     if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
     out.version = 3;
@@ -1338,7 +1338,7 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
-    spendPoint: spendPoint, useCureWater: useCureWater, teamBonus: teamBonus, setAlignment: setAlignment,
+    spendPoint: spendPoint, useCureWater: useCureWater, setAlignment: setAlignment,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
     deckCost: deckCost, setDeck: setDeck, bestDeck: bestDeck,
@@ -1508,7 +1508,7 @@ var Game = (function () {
 
   function attrSummary() {
     var a = state.attr;
-    return 'Stamina +' + (a.stamina * D.CONFIG.staminaPerPoint) + ' · ATK PWR +' + (a.atk * D.CONFIG.atkPctPerPoint) + '% · DEF PWR +' + (a.hp * D.CONFIG.hpPctPerPoint) + '%';
+    return 'Max stamina ' + G.staminaCap(state) + ' \u00B7 ATK PWR ' + G.deckCostCap(state) + ' (your party cost limit)';
   }
 
   function renderQuests() {
@@ -1521,8 +1521,8 @@ var Game = (function () {
       html += '<div class="panel pts"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b>' +
         '<div class="row wrap" style="margin-top:8px">' +
         '<button class="btn small" data-action="point" data-kind="stamina">Stamina +' + D.CONFIG.staminaPerPoint + '</button>' +
-        '<button class="btn small" data-action="point" data-kind="atk">ATK PWR +' + D.CONFIG.atkPctPerPoint + '%</button>' +
-        '<button class="btn small" data-action="point" data-kind="hp">DEF PWR +' + D.CONFIG.hpPctPerPoint + '%</button></div>' +
+        '<button class="btn small" data-action="point" data-kind="atk">ATK PWR +' + D.CONFIG.atkPowerPerPoint + '</button></div>' +
+        '<div class="muted" style="margin-top:6px;font-size:12px">ATK PWR is the most total card cost your party can have.</div>' +
         '<div class="muted" style="margin-top:6px;font-size:12px">' + attrSummary() + '</div></div>';
     }
     if (state.items.cureWater > 0) {
@@ -1562,11 +1562,11 @@ var Game = (function () {
 
   function renderDeck() {
     var cost = G.deckCost(state, state.deck);
-    var cap = G.deckCostCap(state.level);
-    var html = '<h2>Deck</h2><div class="row"><span>Cost <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span>' +
+    var cap = G.deckCostCap(state);
+    var html = '<h2>Deck</h2><div class="row"><span>Cost / ATK PWR <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span>' +
       '<span class="spacer"></span><button class="btn small secondary" data-action="deck-clear">Clear</button>' +
       '<button class="btn small" data-action="deck-auto">Auto-fill</button></div>' +
-      '<p class="muted" style="margin:6px 0">The first card is your leader (+20% ATK and HP). Tap ★ to make a card leader. You can also pick a different party before every battle.</p><div class="slots">';
+      '<p class="muted" style="margin:6px 0">Your party\'s total card cost can\'t go over your ATK PWR (raise it with attribute points). The first card is your leader (+20% ATK and HP); tap \u2605 to change it. You can also pick a different party before every battle.</p><div class="slots">';
     for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
       var c = state.deck[i] ? G.findCard(state, state.deck[i]) : null;
       html += '<div class="slot">' + (c ? cardHtml(c, '', 'data-action="deck-toggle"', i === 0 ? '<span class="lead">LEADER</span>' : '') +
@@ -1632,16 +1632,16 @@ var Game = (function () {
   function showAlignment() {
     var html = '<div class="sc-head"><h2>Choose your alignment</h2></div><div class="sc-body">' +
       '<p class="muted" style="margin-top:0">Cards of your alignment get +' + alignPct() + '% ATK and HP in battle. ' +
-      'You can still use cards of any faction.' + (freshGame ? ' Your starting cards depend on your choice.' : '') + '</p>';
+      'You can still use cards of any faction.' + (freshGame ? ' You start with one champion of your alignment and build your party from cards you win in quests.' : '') + '</p>';
     D.FACTION_ORDER.forEach(function (fid) {
       var f = D.FACTIONS[fid];
-      var showcase = D.CARDS.filter(function (c) { return c.faction === fid && c.rarity === 'SSR'; })[0];
+      var showcase = D.CARD_BY_ID[D.CONFIG.starterCards[fid][0]];
       html += '<div class="panel align-pick" style="border-left:4px solid ' + f.color + '">' +
-        '<div class="align-art"><div class="bu-card r-SSR"><div class="art">' + A.card(showcase) + '</div></div></div>' +
+        '<div class="align-art"><div class="bu-card r-' + showcase.rarity + '"><div class="art">' + A.card(showcase) + '</div></div></div>' +
         '<div class="grow"><b style="font-size:17px">' + icon(fid) + ' ' + f.name + '</b>' +
         '<p class="muted" style="margin:4px 0 8px">' + f.blurb + '</p>' +
-        (freshGame ? '<p class="muted" style="margin:0 0 8px;font-size:12px">Starts with: ' +
-          D.CONFIG.starterCards[fid].map(function (id) { return D.CARD_BY_ID[id].name; }).join(', ') + '</p>' : '') +
+        (freshGame ? '<p class="muted" style="margin:0 0 8px;font-size:12px">Starter pack: your champion, ' +
+          D.CONFIG.starterCards[fid].map(function (id) { return D.CARD_BY_ID[id].name + ' (' + D.CARD_BY_ID[id].rarity + ')'; }).join(', ') + '</p>' : '') +
         '<button class="btn" data-action="align-pick" data-f="' + fid + '">' + (state.alignment === fid ? 'Keep ' : 'Choose ') + f.name + '</button></div></div>';
     });
     openScreen(html + '</div>');
@@ -1674,7 +1674,7 @@ var Game = (function () {
     var info = G.battleInfo(state, partyStage);
     var st = info.stage;
     var cost = G.deckCost(state, party);
-    var cap = G.deckCostCap(state.level);
+    var cap = G.deckCostCap(state);
     var enough = state.stamina >= st.staminaCost;
     var ok = party.length > 0 && cost <= cap && enough;
     var team = G.buildTeam(state, party);
@@ -1684,13 +1684,13 @@ var Game = (function () {
     var myF = D.FACTIONS[state.alignment];
     var tip = 'These foes are ' + icon(info.enemies[0].faction) + ' ' + foeF.name + ' (' + foeF.blurb.split('.')[0].toLowerCase() + '). ' +
       'Your ' + icon(state.alignment) + ' ' + myF.name + ' cards get +' + alignPct() + '% ATK and HP (\u25B2).';
-    var reason = !party.length ? 'Pick at least one card' : (cost > cap ? 'Party cost is over the limit' : (!enough ? 'Need ' + st.staminaCost + ' stamina (you have ' + state.stamina + ')' : ''));
+    var reason = !party.length ? 'Pick at least one card' : (cost > cap ? 'Cost is over your ATK PWR' : (!enough ? 'Need ' + st.staminaCost + ' stamina (you have ' + state.stamina + ')' : ''));
 
     var html = '<div class="sc-head"><button class="btn small secondary" data-action="party-back">‹ Back</button>' +
       '<h2>' + (st.boss ? 'Chapter ' + st.chapter + ' boss' : 'Section ' + st.id + ' · Monster ' + info.fightNo + ' of ' + info.monsters) + '</h2></div>' +
       '<div class="sc-body"><h3 style="margin-top:0">Enemies</h3><div class="foes">' + info.enemies.map(foeHtml).join('') + '</div>' +
       '<p class="muted" style="text-align:center;margin:0 0 10px">' + tip + '</p>' +
-      '<div class="row"><h3 style="margin:0">Your party</h3><span class="spacer"></span><span>Cost <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span></div>' +
+      '<div class="row"><h3 style="margin:0">Your party</h3><span class="spacer"></span><span>Cost / ATK PWR <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span></div>' +
       '<div class="slots" style="margin-top:6px">';
     for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
       var c = party[i] ? G.findCard(state, party[i]) : null;
@@ -1857,7 +1857,8 @@ var Game = (function () {
       html += '<div class="panel"><div class="reward"><span>Experience</span><b>+' + r.exp + '</b></div>' +
         '<div class="reward"><span>Gold</span><b>+' + r.gold + '</b></div>' +
         (r.gems ? '<div class="reward"><span>Gems (first clear)</span><b>+' + r.gems + '</b></div>' : '') +
-        (r.cureWater ? '<div class="reward"><span>Cure Water</span><b>+' + r.cureWater + '</b></div>' : '') + '</div>';
+        (r.cureWater ? '<div class="reward"><span>Cure Water</span><b>+' + r.cureWater + '</b></div>' : '') +
+        (r.points ? '<div class="reward"><span>Attribute point (first clear)</span><b>+' + r.points + '</b></div>' : '') + '</div>';
       if (r.levelsGained) {
         html += '<div class="levelup">Level up! You are now level ' + state.level + '.<br>+' + (r.levelsGained * D.CONFIG.pointsPerLevel) + ' attribute points. Stamina refilled.</div>';
       }

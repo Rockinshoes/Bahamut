@@ -38,7 +38,8 @@ var Game = (function () {
   function maxStamina(level, bonus) { return Math.min(100, 20 + 2 * (level - 1) + (bonus || 0)); }
   function staminaCap(state) { return maxStamina(state.level, state.attr.stamina * CFG.staminaPerPoint); }
   function expToNext(level) { return 60 * level; }
-  function deckCostCap(level) { return 24 + 2 * level; }
+  // ATK PWR: the most total card cost your party can have.
+  function deckCostCap(state) { return CFG.baseAtkPower + state.attr.atk * CFG.atkPowerPerPoint; }
 
   // ---------- card stats ----------
   function maxLevel(card) { return 20 + 10 * card.evo; }
@@ -79,7 +80,7 @@ var Game = (function () {
       deck: [],
       cleared: {},          // section id -> true once the section has been cleared
       progress: {},         // section id -> total monsters beaten there
-      attr: { stamina: 0, atk: 0, hp: 0 },
+      attr: { stamina: 0, atk: 0 },
       attrPoints: 0,
       items: { cureWater: 0 },
       pulls: 0
@@ -140,13 +141,6 @@ var Game = (function () {
     return { ok: true };
   }
 
-  function teamBonus(state) {
-    return {
-      atk: 1 + state.attr.atk * CFG.atkPctPerPoint / 100,
-      hp: 1 + state.attr.hp * CFG.hpPctPerPoint / 100
-    };
-  }
-
   // ---------- summoning (gacha) ----------
   function rateTable() {
     var t = {};
@@ -192,15 +186,15 @@ var Game = (function () {
       seen[uids[i]] = true;
     }
     var cost = deckCost(state, uids);
-    var cap = deckCostCap(state.level);
-    if (cost > cap) { return { ok: false, error: 'Deck cost ' + cost + ' is over your limit of ' + cap + '.' }; }
+    var cap = deckCostCap(state);
+    if (cost > cap) { return { ok: false, error: 'Party cost ' + cost + ' is over your ATK PWR of ' + cap + '.' }; }
     state.deck = uids.slice();
     return { ok: true, cost: cost, cap: cap };
   }
 
   // The strongest legal party, by raw power.
   function bestDeck(state) {
-    var cap = deckCostCap(state.level), picked = [], total = 0;
+    var cap = deckCostCap(state), picked = [], total = 0;
     var byPower = state.cards.slice().sort(function (a, b) {
       var sa = cardStats(a), sb = cardStats(b);
       return (sb.atk + sb.hp / 4) - (sa.atk + sa.hp / 4);
@@ -391,7 +385,6 @@ var Game = (function () {
   // Turns your party cards into battle units. The first card is the leader, and cards
   // matching your alignment get the alignment bonus.
   function buildTeam(state, uids) {
-    var bonus = teamBonus(state);
     return uids.map(function (uid, i) {
       var c = findCard(state, uid);
       var def = D.CARD_BY_ID[c.cardId];
@@ -399,11 +392,11 @@ var Game = (function () {
       var lead = (i === 0) ? CFG.leaderMult : 1;
       var aligned = def.faction === state.alignment;
       var align = aligned ? CFG.alignmentBonus : 1;
-      var hp = Math.round(s.hp * lead * align * bonus.hp);
+      var hp = Math.round(s.hp * lead * align);
       return {
         name: def.name, faction: def.faction, look: def.look, cardId: def.id, rarity: def.rarity, style: def.style,
         level: c.level, evo: c.evo, leader: i === 0, aligned: aligned,
-        atk: Math.round(s.atk * lead * align * bonus.atk), hp: hp, maxHp: hp
+        atk: Math.round(s.atk * lead * align), hp: hp, maxHp: hp
       };
     });
   }
@@ -506,7 +499,7 @@ var Game = (function () {
       exp: stage.staminaCost * 5,
       gold: stage.boss ? 150 + 60 * gi : 12 + 6 * gi,
       gems: 0, cards: [], chest: false, chestGold: 0, cureWater: 0,
-      levelsGained: 0, firstClear: false, sectionCleared: false
+      levelsGained: 0, firstClear: false, sectionCleared: false, points: 0
     };
 
     state.progress[stage.id] = (state.progress[stage.id] || 0) + 1;
@@ -532,6 +525,8 @@ var Game = (function () {
       rewards.sectionCleared = true;
       rewards.firstClear = true;
       rewards.gems = stage.boss ? CFG.firstClearBossGems : CFG.firstClearGems;
+      rewards.points = CFG.pointsPerSectionClear;
+      state.attrPoints += rewards.points;
     }
 
     state.gold += rewards.gold + rewards.chestGold;
@@ -569,9 +564,12 @@ var Game = (function () {
     ['cleared', 'progress', 'attr', 'items'].forEach(function (key) {
       if (!out[key] || typeof out[key] !== 'object' || Array.isArray(out[key])) { out[key] = base[key]; }
     });
-    ['stamina', 'atk', 'hp'].forEach(function (key) {
+    ['stamina', 'atk'].forEach(function (key) {
       if (typeof out.attr[key] !== 'number' || !isFinite(out.attr[key])) { out.attr[key] = 0; }
     });
+    // DEF PWR (attr.hp) was removed; give those points back to spend again.
+    if (typeof out.attr.hp === 'number' && out.attr.hp > 0) { out.attrPoints += out.attr.hp; }
+    delete out.attr.hp;
     if (typeof out.items.cureWater !== 'number' || !isFinite(out.items.cureWater)) { out.items.cureWater = 0; }
     if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
     out.version = 3;
@@ -584,7 +582,7 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
-    spendPoint: spendPoint, useCureWater: useCureWater, teamBonus: teamBonus, setAlignment: setAlignment,
+    spendPoint: spendPoint, useCureWater: useCureWater, setAlignment: setAlignment,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
     deckCost: deckCost, setDeck: setDeck, bestDeck: bestDeck,

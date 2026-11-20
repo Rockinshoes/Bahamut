@@ -28,7 +28,7 @@ function seeded(seed) {
 
 // A game state with a team strong enough to win any stage.
 function strongState() {
-  var s = G.newGame({ now: 0 }); s.level = 30; s.stamina = 100;
+  var s = G.newGame({ now: 0 }); s.level = 30; s.stamina = 100; s.attr.atk = 60;
   s.cards = []; s.deck = [];
   ['pyre-sovereign', 'halo-seraph', 'abyss-knight', 'cyclone-dancer', 'night-sorceress'].forEach(function (id) {
     var c = G.addCard(s, id); c.level = 40; c.evo = 2; s.deck.push(c.uid);
@@ -60,15 +60,15 @@ test('there are exactly three factions and each has N, R, SR and SSR cards', fun
     });
   });
 });
-test('each alignment gets its own starter cards, which exist and fit the cost limit', function () {
+test('picking an alignment gives a starter pack of exactly one champion of that faction', function () {
   D.FACTION_ORDER.forEach(function (f) {
     var s = G.newGame({ now: 0, alignment: f });
     assert.strictEqual(s.alignment, f);
-    assert.strictEqual(s.cards.length, 5);
-    s.cards.forEach(function (c) { assert(D.CARD_BY_ID[c.cardId], 'unknown starter ' + c.cardId); });
-    assert(G.deckCost(s, s.deck) <= G.deckCostCap(s.level));
-    var own = s.cards.filter(function (c) { return D.CARD_BY_ID[c.cardId].faction === f; }).length;
-    assert(own >= 3, f + ' starters should be mostly ' + f);
+    assert.strictEqual(s.cards.length, 1, 'start with a single card, not a full squad');
+    var champ = D.CARD_BY_ID[s.cards[0].cardId];
+    assert.strictEqual(champ.faction, f);
+    assert.deepStrictEqual(s.deck, [s.cards[0].uid]);
+    assert(G.deckCost(s, s.deck) <= G.deckCostCap(s), 'champion must fit the starting ATK PWR');
   });
   assert.strictEqual(G.newGame({ now: 0 }).alignment, null, 'no alignment until the player picks one');
 });
@@ -105,6 +105,7 @@ test('stamina regenerates over time and caps at max', function () {
 console.log('Summoning');
 test('single and ten summons cost gems and add cards', function () {
   var s = G.newGame({ now: 0 });
+  s.gems = 1000;
   var gems = s.gems, cards = s.cards.length, rand = seeded(1);
   var r1 = G.summon(s, 1, rand);
   assert(r1.ok); assert.strictEqual(s.gems, gems - D.CONFIG.singlePullCost); assert.strictEqual(s.cards.length, cards + 1);
@@ -148,15 +149,15 @@ test('deck rejects too many cards, duplicates, unknown cards and over-cost decks
   assert(!G.setDeck(s, [s.cards[0].uid, s.cards[0].uid]).ok);
   assert(!G.setDeck(s, [9999]).ok);
   var costly = [1, 2, 3].map(function () { return G.addCard(s, 'pyre-sovereign').uid; });
-  var r = G.setDeck(s, costly); // 3 x 12 = 36 > 26
-  assert(!r.ok && /over your limit/.test(r.error));
+  var r = G.setDeck(s, costly); // 3 x 12 = 36 > starting ATK PWR of 12
+  assert(!r.ok && /ATK PWR/.test(r.error));
 });
 test('bestDeck picks a legal, strong party', function () {
   var s = G.newGame({ now: 0 });
   G.addCard(s, 'pyre-sovereign');
   var picked = G.bestDeck(s);
   assert(picked.length <= D.CONFIG.maxDeckSize);
-  assert(G.deckCost(s, picked) <= G.deckCostCap(s.level));
+  assert(G.deckCost(s, picked) <= G.deckCostCap(s));
   assert(G.setDeck(s, picked).ok);
 });
 
@@ -300,6 +301,8 @@ test('a section needs 3 monsters, then the chest opens and the section is cleare
   assert(r3.rewards.chest, 'chest should open on the 3rd monster');
   assert(r3.rewards.chestGold > 0);
   assert(r3.rewards.sectionCleared && s.cleared['1-1']);
+  assert.strictEqual(r3.rewards.points, D.CONFIG.pointsPerSectionClear, 'first clear grants an attribute point');
+  assert.strictEqual(s.attrPoints, D.CONFIG.pointsPerSectionClear);
   assert.strictEqual(r3.rewards.gems, D.CONFIG.firstClearGems);
   assert.strictEqual(s.gems, gems + D.CONFIG.firstClearGems);
   assert(G.isUnlocked(s, '1-2'));
@@ -359,6 +362,7 @@ test('you can choose the party for a battle; bad parties are refused and change 
 });
 test('the first card in the party is the leader and gets +20% ATK and HP', function () {
   var s = G.newGame({ now: 0 });
+  s.deck.push(G.addCard(s, 'ember-imp').uid);
   var team = G.buildTeam(s, s.deck);
   var st = G.cardStats(G.findCard(s, s.deck[0]));
   assert(team[0].leader && !team[1].leader);
@@ -385,16 +389,21 @@ test('levelling up gives attribute points, refills stamina and grants gems', fun
   assert.strictEqual(s.attrPoints, D.CONFIG.pointsPerLevel);
   assert(s.gems > gems);
 });
-test('attribute points raise max stamina, team ATK and team HP', function () {
-  var s = G.newGame({ now: 0 });
+test('attribute points raise max stamina or ATK PWR, and ATK PWR is the party cost limit', function () {
+  var s = G.newGame({ now: 0, alignment: 'fallen' });
   assert(!G.spendPoint(s, 'atk').ok, 'no points yet');
-  s.attrPoints = 3;
-  var cap = G.staminaCap(s), atk0 = G.buildTeam(s, s.deck)[1].atk, hp0 = G.buildTeam(s, s.deck)[1].maxHp;
+  assert.strictEqual(G.deckCostCap(s), D.CONFIG.baseAtkPower);
+  var a = G.addCard(s, 'gloom-thief');           // cost 5; champion 8 + 5 = 13 > 12
+  assert(!G.setDeck(s, [s.deck[0], a.uid]).ok, 'over ATK PWR');
+  s.attrPoints = 2;
+  var cap = G.staminaCap(s);
   assert(G.spendPoint(s, 'stamina').ok);
   assert.strictEqual(G.staminaCap(s), cap + D.CONFIG.staminaPerPoint);
-  assert(G.spendPoint(s, 'atk').ok); assert(G.spendPoint(s, 'hp').ok);
-  assert(G.buildTeam(s, s.deck)[1].atk > atk0); assert(G.buildTeam(s, s.deck)[1].maxHp > hp0);
+  assert(G.spendPoint(s, 'atk').ok);
+  assert.strictEqual(G.deckCostCap(s), D.CONFIG.baseAtkPower + D.CONFIG.atkPowerPerPoint);
+  assert(G.setDeck(s, [s.deck[0], a.uid]).ok, 'fits after raising ATK PWR');
   assert.strictEqual(s.attrPoints, 0);
+  assert(!G.spendPoint(s, 'hp').ok, 'DEF PWR is not an attribute yet');
   assert(!G.spendPoint(s, 'bogus').ok);
 });
 test('the whole game is winnable with a maxed team', function () {
@@ -434,12 +443,20 @@ test('saves from the first version (no progress/attributes/items) still load', f
   old.cleared = { '1-1': true };
   var back = G.deserialize(JSON.stringify(old));
   assert(back);
-  assert.deepStrictEqual(back.attr, { stamina: 0, atk: 0, hp: 0 });
+  assert.deepStrictEqual(back.attr, { stamina: 0, atk: 0 });
   assert.strictEqual(back.items.cureWater, 0);
   assert.strictEqual(back.attrPoints, 0);
   assert(back.cleared['1-1']);
   assert.strictEqual(back.alignment, null, 'old saves have no alignment yet; the game asks for one');
   assert(G.fight(back, '1-2', { rand: seeded(1), now: 0 }).ok, 'old save should be playable');
+});
+test('points that an older save spent on the removed DEF PWR are given back', function () {
+  var s = G.newGame({ now: 0, alignment: 'mortal' });
+  var old = JSON.parse(G.serialize(s));
+  old.attr = { stamina: 1, atk: 2, hp: 3 }; old.attrPoints = 1;
+  var back = G.deserialize(JSON.stringify(old));
+  assert.deepStrictEqual(back.attr, { stamina: 1, atk: 2 });
+  assert.strictEqual(back.attrPoints, 4);
 });
 test('loading drops unknown cards and keeps new uids unique', function () {
   var s = G.newGame({ now: 0 });
