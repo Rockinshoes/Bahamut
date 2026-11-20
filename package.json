@@ -4,6 +4,7 @@
   "private": true,
   "description": "A personal, local card-battle gacha game inspired by browser card games of the early 2010s.",
   "scripts": {
-    "test": "node tests/game.test.js"
+    "test": "node tests/game.test.js && node tests/art.test.js",
+    "art:preview": "node tools/generate-art.js --dry-run"
   }
 }

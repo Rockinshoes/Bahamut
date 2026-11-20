@@ -1,0 +1,84 @@
+# Generate card art with an image AI and commit it to the repo.
+#
+# Run it from the Actions tab: "Generate card art" > "Run workflow".
+# Needs an API key stored as a repository secret (see README, "Generating card art"):
+#   OPENAI_API_KEY, GEMINI_API_KEY or REPLICATE_API_TOKEN
+# Optional repository variable IMAGE_MODEL picks a different model for that service.
+name: Generate card art
+
+on:
+  workflow_dispatch:
+    inputs:
+      provider:
+        description: Image service to use
+        type: choice
+        options: [openai, gemini, replicate]
+        default: openai
+      only:
+        description: "Only these ids, comma separated (e.g. tiamat,odin,foe-fafnir). Leave empty for every card that has no art yet."
+        required: false
+        default: ""
+      overwrite:
+        description: Redo pictures that already exist
+        type: boolean
+        default: false
+      limit:
+        description: "Make at most this many pictures (0 = no limit). Try 3 first to check the look."
+        required: false
+        default: "3"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-art
+  cancel-in-progress: false
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install the image compressor
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq webp
+
+      - name: Generate art
+        env:
+          PROVIDER: ${{ inputs.provider }}
+          ONLY: ${{ inputs.only }}
+          LIMIT: ${{ inputs.limit }}
+          OVERWRITE: ${{ inputs.overwrite }}
+          IMAGE_MODEL: ${{ vars.IMAGE_MODEL }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
+        run: |
+          args=(--provider "$PROVIDER" --limit "$LIMIT")
+          if [ -n "$ONLY" ]; then args+=(--only "$ONLY"); fi
+          if [ "$OVERWRITE" = "true" ]; then args+=(--overwrite); fi
+          node tools/generate-art.js "${args[@]}"
+
+      - name: Rebuild play.html with the new art
+        if: always()
+        run: node build.js
+
+      - name: Commit the art
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/cards play.html
+          if git diff --cached --quiet; then
+            echo "No new art to commit."
+          else
+            git commit -m "Add generated card art ($PROVIDER)"
+            git push
+          fi
+        env:
+          PROVIDER: ${{ inputs.provider }}

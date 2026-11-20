@@ -1,7 +1,8 @@
-# Card art stays on your own computer and is never uploaded.
-# (assets/cards/.gitkeep keeps the empty folder in the repo.)
-assets/cards/*
-!assets/cards/.gitkeep
+# Card art in assets/cards/ IS tracked now, so generated art is saved in the repo and
+# bundled into play.html. Only add art you have the rights to use.
+
+# Full-size originals from the art generator (assets/cards/ gets the smaller copies).
+art/raw/
 
 # Misc
 node_modules/

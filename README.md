@@ -94,20 +94,51 @@ Fusing a card of the same faction gives 1.5x exp.
 
 ## Art
 
-Every card and enemy has **placeholder art drawn by the game itself** (`js/art.js`), so nothing needs downloading.
+Every card and enemy has **art drawn by the game itself** (`js/art.js`), so nothing is needed to play.
+Real art replaces it: any image at `assets/cards/<id>.webp` (or `.png`) is shown instead.
+Cards use their card id (`assets/cards/tiamat.webp`); enemies use `foe-` plus their name (`assets/cards/foe-fafnir.webp`).
 
-To use your own art, put an image named after the card's id into `assets/cards/` and reload, for example:
+## Generating card art with an image AI
 
-```
-assets/cards/ember-imp.png
-assets/cards/pyre-sovereign.png
-```
+The repo can paint all the art for you with an image AI, using a button on GitHub. The
+descriptions it uses are in **`art/prompts.js`**: one shared style for the whole set, plus a
+line for each card and enemy. The game rules about looks are built in (Mortal cards are
+always human, Immortal look divine, Fallen look demonic).
 
-Card ids are the first column of the list in `js/data.js`. A card with an image uses it instead of the placeholder.
-Your browser's developer console may show "failed to load" lines for cards that have no image. That is normal and harmless.
+It works with three services; pick one:
 
-The `.gitignore` file keeps everything in `assets/cards/` **out of Git**, so art never gets uploaded
-to GitHub by accident. If you want art in the repo, you'd have to change `.gitignore`.
+| Service | Secret name | Where to get a key |
+| --- | --- | --- |
+| OpenAI (GPT Image) | `OPENAI_API_KEY` | platform.openai.com > API keys (needs billing set up) |
+| Google Gemini ("Nano Banana") | `GEMINI_API_KEY` | aistudio.google.com > Get API key |
+| Replicate (FLUX) | `REPLICATE_API_TOKEN` | replicate.com > Account > API tokens |
+
+Each picture costs a small amount on these services; check their current prices. There are 57 pictures in all.
+
+**One-time setup:** on github.com open this repo, then **Settings > Secrets and variables > Actions >
+New repository secret**. Use the secret name from the table and paste your key. (A key is like a
+password: never put it in a file in the repo.)
+
+**Making art:**
+
+1. Open the repo's **Actions** tab and choose **Generate card art** on the left.
+2. Press **Run workflow**. Pick the service. Leave **limit** at 3 the first time, to check the look cheaply.
+3. Press the green **Run workflow** button. It takes a minute or two per picture.
+4. When it finishes, the new pictures are committed to `assets/cards/` and `play.html` is rebuilt
+   with them inside. Download the repo again (or `git pull`) to get them.
+5. Happy with the look? Run it again with limit **0** to paint everything that still has no art.
+
+**Redo one card:** put its id in **only** (for example `tiamat`, or `tiamat,odin,foe-fafnir`) and tick **overwrite**.
+To change how it is painted, edit its line in `art/prompts.js` first. To change the look of the whole
+set, edit `STYLE` at the top of that file and redo everything.
+
+**Different model:** add a repository *variable* (same Settings page, Variables tab) named
+`IMAGE_MODEL`, e.g. a newer OpenAI or Gemini image model, or another Replicate model like
+`black-forest-labs/flux-1.1-pro-ultra`.
+
+**Preview the prompts without spending anything:** `node tools/generate-art.js --dry-run`
+
+Only add art you have the rights to use. Art from other games belongs to their makers.
 
 ## Changing the game
 
@@ -140,7 +171,10 @@ js/art.js         draws the placeholder card and enemy art
 js/game.js        the rules (summoning, fusion, battles, quests, saving). No screen code.
 js/ui.js          draws the screens, the party picker and the animated battle
 tests/game.test.js  automatic checks of the rules
-assets/cards/     your own card art goes here (not tracked by Git)
+assets/cards/     card and enemy art (generated or your own)
+art/prompts.js    what the image AI is asked to paint for each card
+tools/generate-art.js  the art generator (run by the GitHub Action)
+.github/workflows/generate-art.yml  the "Generate card art" button on GitHub
 ```
 
 ## Running the tests (optional)
@@ -149,6 +183,7 @@ If you have [Node.js](https://nodejs.org) installed:
 
 ```
 node tests/game.test.js
+node tests/art.test.js
 ```
 
 ## Ideas for later
