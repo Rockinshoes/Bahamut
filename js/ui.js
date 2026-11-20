@@ -1,16 +1,29 @@
 /*
  * ui.js - draws the screens and reacts to taps. All the rules live in game.js.
+ *
+ * Flow of a quest battle, like the original:
+ *   Quests tab -> Enter -> party screen (pick your cards, leader first) ->
+ *   Battle screen (animated, replays what game.js simulated) -> results screen.
  */
 (function () {
   'use strict';
 
   var G = Game;
   var D = GameData;
+  var A = Art;
+
   var state = null;
   var currentTab = 'quests';
   var cardSort = 'rarity';
-  var fuseSel = [];      // card uids picked as fusion material
+  var fuseSel = [];            // card uids picked as fusion material
   var toastTimer = null;
+
+  var party = [];              // card uids picked on the party screen
+  var partyStage = null;       // stage id the party screen is for
+  var battleRun = 0;           // bumped to cancel a battle replay that is still running
+  var speed = 1;               // battle playback speed: 1, 2 or 4
+  var skipping = false;
+  var current = null;          // the battle result being replayed
 
   // ---------- saving / loading ----------
   function save() {
@@ -28,8 +41,9 @@
   }
 
   // ---------- tiny helpers ----------
-  function $(sel) { return document.querySelector(sel); }
   function el(id) { return document.getElementById(id); }
+  function icon(element) { return D.ELEMENTS[element].icon; }
+  function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
 
   function toast(msg) {
     var t = el('toast');
@@ -45,8 +59,18 @@
   }
   function closeModal() { el('modal-backdrop').hidden = true; el('modal').innerHTML = ''; }
 
+  function openScreen(html) { var s = el('screen'); s.innerHTML = html; s.hidden = false; }
+  function closeScreen() {
+    battleRun++;
+    skipping = false;
+    var s = el('screen');
+    s.hidden = true;
+    s.innerHTML = '';
+    render();
+  }
+
   // Custom art: assets/cards/<card-id>.png. We check once at startup which images
-  // exist, so cards without art just show the colored placeholder.
+  // exist; cards without one keep the drawn placeholder (js/art.js).
   var artOk = {};
   function probeArt() {
     var pending = false;
@@ -56,24 +80,29 @@
         artOk[c.id] = true;
         if (!pending) {
           pending = true;
-          setTimeout(function () { pending = false; if (el('modal-backdrop').hidden) { render(); } }, 50);
+          setTimeout(function () {
+            pending = false;
+            if (el('modal-backdrop').hidden && el('screen').hidden) { render(); }
+          }, 50);
         }
       };
       img.src = 'assets/cards/' + c.id + '.png';
     });
   }
+  function artFor(def) {
+    return A.card(def) + (artOk[def.id] ? '<img src="assets/cards/' + def.id + '.png" alt="">' : '');
+  }
 
-  function cardHtml(card, cls) {
+  // attrs: extra attributes for the card's outer tag; extra: extra markup placed inside the card.
+  function cardHtml(card, cls, attrs, extra) {
     var def = D.CARD_BY_ID[card.cardId];
-    var elem = D.ELEMENTS[def.element];
     var st = G.cardStats(card);
     var stars = card.evo ? ' <span class="evo">' + new Array(card.evo + 1).join('★') + '</span>' : '';
-    return '<div class="card r-' + def.rarity + ' ' + (cls || '') + '" data-uid="' + card.uid + '" style="--ec:' + elem.color + '">' +
-      '<div class="art">' + elem.icon +
-      (artOk[def.id] ? '<img src="assets/cards/' + def.id + '.png" alt="">' : '') + '</div>' +
+    return '<div class="card r-' + def.rarity + ' ' + (cls || '') + '" ' + (attrs || '') + ' data-uid="' + card.uid + '">' +
+      '<div class="art">' + artFor(def) + '</div>' +
       '<span class="rar">' + def.rarity + '</span>' +
-      '<span class="lv">Lv' + card.level + stars + '</span>' +
-      '<div class="info"><div class="nm">' + def.name + '</div>ATK ' + st.atk + ' HP ' + st.hp + '</div></div>';
+      '<span class="lv">Lv' + card.level + stars + '</span>' + (extra || '') +
+      '<div class="info"><div class="nm">' + icon(def.element) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' HP ' + st.hp + '</div></div></div>';
   }
 
   function sortedCards(cards, mode) {
@@ -81,6 +110,10 @@
     var list = cards.slice();
     list.sort(function (a, b) {
       var da = D.CARD_BY_ID[a.cardId], db = D.CARD_BY_ID[b.cardId];
+      if (mode === 'power') {
+        var sa = G.cardStats(a), sb = G.cardStats(b);
+        return (sb.atk + sb.hp / 4) - (sa.atk + sa.hp / 4) || b.uid - a.uid;
+      }
       if (mode === 'level') { return (b.level + b.evo * 100) - (a.level + a.evo * 100) || b.uid - a.uid; }
       if (mode === 'recent') { return b.uid - a.uid; }
       if (mode === 'element') { return da.element < db.element ? -1 : da.element > db.element ? 1 : order.indexOf(db.rarity) - order.indexOf(da.rarity); }
@@ -93,7 +126,7 @@
   // ---------- top bar ----------
   function renderTopbar() {
     G.regenStamina(state);
-    var max = G.maxStamina(state.level);
+    var max = G.staminaCap(state);
     el('s-level').textContent = state.level;
     el('s-stamina').textContent = state.stamina + '/' + max;
     el('s-stamina-bar').style.width = Math.min(100, state.stamina / max * 100) + '%';
@@ -104,21 +137,49 @@
   }
 
   // ---------- tabs ----------
+  function pips(done, total) {
+    var s = '';
+    for (var i = 0; i < total; i++) { s += i < done ? '●' : '○'; }
+    return s;
+  }
+
+  function attrSummary() {
+    var a = state.attr;
+    return 'Stamina +' + (a.stamina * D.CONFIG.staminaPerPoint) + ' · ATK PWR +' + (a.atk * D.CONFIG.atkPctPerPoint) + '% · DEF PWR +' + (a.hp * D.CONFIG.hpPctPerPoint) + '%';
+  }
+
   function renderQuests() {
-    var html = '<h2>Quests</h2><p class="muted">Exp to next level: ' + state.exp + ' / ' + G.expToNext(state.level) + '. A lost battle costs no stamina.</p>';
+    var need = G.expToNext(state.level);
+    var html = '<h2>Quests</h2>' +
+      '<div class="panel"><div class="row"><b>Level ' + state.level + '</b><span class="spacer"></span><span class="muted">' + state.exp + ' / ' + need + ' exp</span></div>' +
+      '<div class="bar" style="height:7px;margin-top:6px"><div style="width:' + Math.min(100, state.exp / need * 100) + '%"></div></div></div>';
+
+    if (state.attrPoints > 0) {
+      html += '<div class="panel pts"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b>' +
+        '<div class="row wrap" style="margin-top:8px">' +
+        '<button class="btn small" data-action="point" data-kind="stamina">Stamina +' + D.CONFIG.staminaPerPoint + '</button>' +
+        '<button class="btn small" data-action="point" data-kind="atk">ATK PWR +' + D.CONFIG.atkPctPerPoint + '%</button>' +
+        '<button class="btn small" data-action="point" data-kind="hp">DEF PWR +' + D.CONFIG.hpPctPerPoint + '%</button></div>' +
+        '<div class="muted" style="margin-top:6px;font-size:12px">' + attrSummary() + '</div></div>';
+    }
+    if (state.items.cureWater > 0) {
+      html += '<div class="panel row"><span><b>Cure Water x' + state.items.cureWater + '</b><br><span class="muted">Refills all your stamina</span></span><span class="spacer"></span>' +
+        '<button class="btn small" data-action="curewater"' + (state.stamina >= G.staminaCap(state) ? ' disabled' : '') + '>Use</button></div>';
+    }
+
     D.CHAPTERS.forEach(function (ch) {
-      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' ' + D.ELEMENTS[ch.element].icon + '</div>';
+      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' ' + icon(ch.element) + '</div>';
       G.STAGES.filter(function (s) { return s.chapter === ch.id; }).forEach(function (s) {
         var unlocked = G.isUnlocked(state, s.id);
         var cleared = !!state.cleared[s.id];
-        var foes = G.stageEnemies(s);
-        var icons = foes.map(function (f) { return D.ELEMENTS[f.element].icon; }).join('');
+        var foes = G.stageEnemies(s, G.nextFightNo(state, s.id));
+        var icons = foes.map(function (f) { return icon(f.element); }).join('');
         html += '<div class="stage' + (unlocked ? '' : ' locked') + '">' +
-          '<div><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') + '</div>' +
-          '<div class="muted">' + foes.length + ' foes ' + icons + ' &middot; ' + s.staminaCost + ' stamina</div>' +
-          (cleared ? '<div class="cleared">Cleared</div>' : '') + '</div>' +
-          '<span class="spacer"></span>' +
-          '<button class="btn small" data-action="play" data-stage="' + s.id + '"' + (unlocked ? '' : ' disabled') + '>Fight</button></div>';
+          '<div class="grow"><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') +
+          (cleared ? ' <span class="cleared">Cleared</span>' : '') + '</div>' +
+          '<div class="pips">' + pips(G.sectionProgress(state, s.id), s.monsters) + '</div>' +
+          '<div class="muted">' + (s.boss ? 'Boss battle' : 'Monster ' + G.nextFightNo(state, s.id) + ' of ' + s.monsters) + ' ' + icons + ' · ' + s.staminaCost + ' stamina</div></div>' +
+          '<button class="btn small" data-action="enter" data-stage="' + s.id + '"' + (unlocked ? '' : ' disabled') + '>' + (s.boss ? 'Challenge' : 'Enter') + '</button></div>';
       });
     });
     return html;
@@ -132,7 +193,7 @@
     });
     html += '</select></div><h3>Tap a card to fuse, evolve or sell it</h3><div class="card-grid">';
     sortedCards(state.cards, cardSort).forEach(function (c) {
-      html += cardHtml(c).replace('class="card', 'data-action="card-open" class="card');
+      html += cardHtml(c, '', 'data-action="card-open"');
     });
     return html + '</div>';
   }
@@ -142,15 +203,17 @@
     var cap = G.deckCostCap(state.level);
     var html = '<h2>Deck</h2><div class="row"><span>Cost <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span>' +
       '<span class="spacer"></span><button class="btn small secondary" data-action="deck-clear">Clear</button>' +
-      '<button class="btn small" data-action="deck-auto">Auto-fill</button></div><p></p><div class="slots">';
+      '<button class="btn small" data-action="deck-auto">Auto-fill</button></div>' +
+      '<p class="muted" style="margin:6px 0">The first card is your leader (+20% ATK and HP). Tap ★ to make a card leader. You can also pick a different party before every battle.</p><div class="slots">';
     for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
       var c = state.deck[i] ? G.findCard(state, state.deck[i]) : null;
-      html += '<div class="slot">' + (c ? cardHtml(c).replace('class="card', 'data-action="deck-toggle" class="card') : '+') + '</div>';
+      html += '<div class="slot">' + (c ? cardHtml(c, '', 'data-action="deck-toggle"', i === 0 ? '<span class="lead">LEADER</span>' : '') +
+        (i > 0 ? '<button class="star" data-action="deck-lead" data-uid="' + c.uid + '">★</button>' : '') : '+') + '</div>';
     }
     html += '</div><h3>Your cards (tap to add or remove)</h3><div class="card-grid">';
     sortedCards(state.cards, 'rarity').forEach(function (c) {
       var inDeck = state.deck.indexOf(c.uid) !== -1;
-      html += cardHtml(c, inDeck ? 'selected' : '').replace('class="card', 'data-action="deck-toggle" class="card');
+      html += cardHtml(c, inDeck ? 'selected' : '', 'data-action="deck-toggle"');
     });
     return html + '</div>';
   }
@@ -165,12 +228,14 @@
     D.RARITY_ORDER.forEach(function (r) {
       html += '<tr><td>' + r + ' &ndash; ' + D.RARITIES[r].name + '</td><td>' + rates[r] + '%</td></tr>';
     });
-    return html + '</table><p class="muted">Total summons: ' + state.pulls + '. Earn more gems by clearing quests for the first time and by levelling up.</p>';
+    return html + '</table><p class="muted">Total summons: ' + state.pulls + '. Earn more gems by clearing sections for the first time and by levelling up.</p>';
   }
 
   function renderMore() {
     return '<h2>More</h2>' +
-      '<div class="panel"><b>Your own art</b><p class="muted">Put an image named after the card id into <code>assets/cards/</code> (for example <code>assets/cards/ember-imp.png</code>) and reload. Without an image a colored placeholder is shown. Card ids are listed in <code>js/data.js</code>.</p></div>' +
+      '<div class="panel"><b>Your character</b><p class="muted" style="margin:6px 0 0">Level ' + state.level + ' · ' + attrSummary() +
+      '<br>Unspent attribute points: ' + state.attrPoints + ' (spend them on the Quests tab)</p></div>' +
+      '<div class="panel"><b>Your own art</b><p class="muted">Every card has drawn placeholder art. To replace one, put an image named after the card id into <code>assets/cards/</code> (for example <code>assets/cards/ember-imp.png</code>) and reload. Card ids are listed in <code>js/data.js</code>.</p></div>' +
       '<div class="panel"><b>Save backup</b><p class="muted">Your game saves in this browser automatically. Copy the text below to back it up, or paste a backup and press Import.</p>' +
       '<textarea id="save-box" spellcheck="false"></textarea><div class="row wrap" style="margin-top:8px">' +
       '<button class="btn small secondary" data-action="export">Show my save</button>' +
@@ -178,6 +243,7 @@
       '<div class="panel"><b>Testing</b><div class="row wrap" style="margin-top:8px">' +
       '<button class="btn small secondary" data-action="gems">+1000 gems</button>' +
       '<button class="btn small secondary" data-action="gold">+5000 gold</button>' +
+      '<button class="btn small secondary" data-action="stamina-fill">Fill stamina</button>' +
       '<button class="btn small danger" data-action="reset">Reset game</button></div></div>';
   }
 
@@ -198,32 +264,256 @@
     });
   }
 
-  // ---------- modals ----------
-  function showBattle(res) {
-    var html = '<h2 class="' + (res.win ? 'result-win' : 'result-lose') + '">' + (res.win ? 'Victory!' : 'Defeat') +
-      ' <span class="muted" style="font-size:13px">Stage ' + res.stage.id + ' &middot; ' + res.rounds + ' rounds</span></h2>';
-    if (res.win) {
-      var r = res.rewards;
-      html += '<div class="panel">+' + r.exp + ' exp &middot; +' + r.gold + ' gold' + (r.gems ? ' &middot; +' + r.gems + ' gems (first clear!)' : '') +
-        (r.levelsGained ? '<br><b>Level up! You are now level ' + state.level + '. Stamina refilled.</b>' : '') + '</div>';
-      if (r.card) { html += '<p>You found:</p><div style="width:120px">' + cardHtml(r.card) + '</div>'; }
-    } else {
-      html += '<p class="muted">Your team was wiped out. Level up your cards with Fuse, or try a different deck. No stamina was spent.</p>';
-    }
-    html += '<h3>Battle log</h3><div class="log">' + res.log.join('\n') + '</div>' +
-      '<p><button class="btn" data-action="close">Close</button></p>';
-    openModal(html);
+  // ---------- party select screen ----------
+  function foeHtml(u) {
+    return '<div class="foe"><div class="bu-card r-' + (u.boss ? 'SSR' : 'R') + '"><div class="art">' + A.enemy(u) + '</div>' +
+      '<span class="bu-el">' + icon(u.element) + '</span><div class="bu-name">' + u.name + '</div></div></div>';
   }
 
+  // Which element(s) deal the most damage to these enemies.
+  function bestElements(enemies) {
+    var best = [], bestScore = -1;
+    Object.keys(D.ELEMENTS).forEach(function (e) {
+      var score = enemies.reduce(function (s, f) { return s + G.elementMult(e, f.element); }, 0);
+      if (score > bestScore + 1e-9) { bestScore = score; best = [e]; }
+      else if (Math.abs(score - bestScore) < 1e-9) { best.push(e); }
+    });
+    return best;
+  }
+
+  function advBadge(card, enemies) {
+    var def = D.CARD_BY_ID[card.cardId];
+    var avg = enemies.reduce(function (s, f) { return s + G.elementMult(def.element, f.element); }, 0) / enemies.length;
+    if (avg >= 1.15) { return '<span class="adv up">▲</span>'; }
+    if (avg <= 0.9) { return '<span class="adv down">▼</span>'; }
+    return '';
+  }
+
+  function showParty(stageId, keep) {
+    var info = G.battleInfo(state, stageId);
+    if (!info.ok) { toast(info.error); return; }
+    partyStage = stageId;
+    if (!keep) { party = state.deck.slice(); }
+    party = party.filter(function (u) { return !!G.findCard(state, u); });
+    renderParty();
+  }
+
+  function renderParty() {
+    G.regenStamina(state);
+    var info = G.battleInfo(state, partyStage);
+    var st = info.stage;
+    var cost = G.deckCost(state, party);
+    var cap = G.deckCostCap(state.level);
+    var enough = state.stamina >= st.staminaCost;
+    var ok = party.length > 0 && cost <= cap && enough;
+    var team = G.buildTeam(state, party);
+    var atk = team.reduce(function (s, u) { return s + u.atk; }, 0);
+    var hp = team.reduce(function (s, u) { return s + u.maxHp; }, 0);
+    var tip = bestElements(info.enemies).map(function (e) { return icon(e) + ' ' + D.ELEMENTS[e].name; }).join(' or ');
+    var reason = !party.length ? 'Pick at least one card' : (cost > cap ? 'Party cost is over the limit' : (!enough ? 'Need ' + st.staminaCost + ' stamina (you have ' + state.stamina + ')' : ''));
+
+    var html = '<div class="sc-head"><button class="btn small secondary" data-action="party-back">‹ Back</button>' +
+      '<h2>' + (st.boss ? 'Chapter ' + st.chapter + ' boss' : 'Section ' + st.id + ' · Monster ' + info.fightNo + ' of ' + info.monsters) + '</h2></div>' +
+      '<div class="sc-body"><h3 style="margin-top:0">Enemies</h3><div class="foes">' + info.enemies.map(foeHtml).join('') + '</div>' +
+      '<p class="muted" style="text-align:center;margin:0 0 10px">' + tip + ' hits these foes hardest. ▲ = strong against them, ▼ = weak.</p>' +
+      '<div class="row"><h3 style="margin:0">Your party</h3><span class="spacer"></span><span>Cost <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span></div>' +
+      '<div class="slots" style="margin-top:6px">';
+    for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
+      var c = party[i] ? G.findCard(state, party[i]) : null;
+      html += '<div class="slot">' + (c ? cardHtml(c, '', 'data-action="party-toggle"', i === 0 ? '<span class="lead">LEADER</span>' : '') +
+        (i > 0 ? '<button class="star" data-action="party-lead" data-uid="' + c.uid + '">★</button>' : '') : '+') + '</div>';
+    }
+    html += '</div><p class="muted" style="margin:4px 0 0">Party power: ATK ' + atk + ' · HP ' + hp + '. The first card is the leader (+20%). Tap a card to remove it, ★ to make it leader.</p>' +
+      '<h3>Your cards</h3><div class="card-grid">';
+    sortedCards(state.cards, 'power').forEach(function (cd) {
+      var inP = party.indexOf(cd.uid) !== -1;
+      html += cardHtml(cd, inP ? 'selected' : '', 'data-action="party-toggle"', advBadge(cd, info.enemies));
+    });
+    html += '</div></div><div class="sc-foot">' +
+      '<button class="btn secondary" data-action="party-auto">Auto-fill</button>' +
+      '<button class="btn big" data-action="party-go"' + (ok ? '' : ' disabled') + '>' + (ok ? 'Battle! (−' + st.staminaCost + ' stamina)' : reason) + '</button></div>';
+    var body = el('screen').querySelector('.sc-body');
+    var keepScroll = body ? body.scrollTop : 0;
+    openScreen(html);
+    el('screen').querySelector('.sc-body').scrollTop = keepScroll;
+  }
+
+  // ---------- battle screen ----------
+  function unitHtml(u, side, i) {
+    var svg = side === 'p' ? artFor(D.CARD_BY_ID[u.cardId]) : A.enemy(u);
+    var rar = side === 'p' ? u.rarity : (u.boss ? 'SSR' : 'R');
+    return '<div class="bu' + (u.boss ? ' boss' : '') + '" data-side="' + side + '" data-i="' + i + '">' +
+      '<div class="bu-card r-' + rar + '"><div class="art">' + svg + '</div>' +
+      '<span class="bu-el">' + icon(u.element) + '</span>' + (u.leader ? '<span class="bu-lead">★</span>' : '') +
+      '<div class="bu-name">' + u.name + '</div></div>' +
+      '<div class="hpbar"><i></i></div><div class="hpnum">' + u.hp + '</div></div>';
+  }
+
+  function unitEl(side, i) {
+    return el('screen').querySelector('.bu[data-side="' + side + '"][data-i="' + i + '"]');
+  }
+
+  function setHp(side, i, hp) {
+    var u = unitEl(side, i);
+    if (!u) { return; }
+    var list = side === 'p' ? current.units.player : current.units.enemy;
+    var ratio = hp / list[i].maxHp;
+    u.querySelector('.hpbar i').style.width = (ratio * 100) + '%';
+    u.querySelector('.hpnum').textContent = hp;
+    u.classList.toggle('mid', ratio < 0.6 && ratio >= 0.3);
+    u.classList.toggle('low', ratio < 0.3);
+    u.classList.toggle('dead', hp <= 0);
+  }
+
+  function updateSpeedButtons() {
+    Array.prototype.forEach.call(el('screen').querySelectorAll('.b-top [data-action="speed"]'), function (b) {
+      b.classList.toggle('on', parseInt(b.getAttribute('data-s'), 10) === speed);
+    });
+  }
+
+  function spawnDamage(targetEl, e) {
+    var field = el('screen').querySelector('.b-field');
+    if (!field) { return; }
+    var fr = field.getBoundingClientRect();
+    var tr = targetEl.querySelector('.bu-card').getBoundingClientRect();
+    var d = document.createElement('div');
+    d.className = 'dmg' + (e.mult > 1 ? ' strong' : (e.mult < 1 ? ' weak' : ''));
+    d.textContent = (e.mult > 1 ? '★ ' : '') + e.dmg;
+    d.style.left = (tr.left - fr.left + tr.width / 2) + 'px';
+    d.style.top = (tr.top - fr.top + tr.height / 2) + 'px';
+    field.appendChild(d);
+    setTimeout(function () { if (d.parentNode) { d.parentNode.removeChild(d); } }, 1000);
+  }
+
+  function startBattle(res) {
+    battleRun++;
+    var run = battleRun;
+    skipping = false;
+    current = res;
+    var tint = D.ELEMENTS[D.CHAPTERS[res.stage.chapter - 1].element].color + '55';
+    var html = '<div class="battle"><div class="b-top"><span class="round" id="b-round">Battle start</span>' +
+      '<button data-action="speed" data-s="1">1x</button><button data-action="speed" data-s="2">2x</button>' +
+      '<button data-action="speed" data-s="4">4x</button><button data-action="skip">Skip</button></div>' +
+      '<div class="b-field" style="--field:' + tint + '">' +
+      '<div class="b-row">' + res.units.enemy.map(function (u, i) { return unitHtml(u, 'e', i); }).join('') + '</div>' +
+      '<div class="b-mid" id="b-mid">' + (res.stage.boss ? 'Boss battle' : 'Monster ' + res.fightNo + ' of ' + res.monsters) + '</div>' +
+      '<div class="b-row">' + res.units.player.map(function (u, i) { return unitHtml(u, 'p', i); }).join('') + '</div></div>' +
+      '<div class="b-log" id="b-log">&nbsp;</div></div>';
+    openScreen(html);
+    updateSpeedButtons();
+    playBattle(res, run).then(function (finished) {
+      if (!finished || run !== battleRun) { return; }
+      setTimeout(function () { if (run === battleRun) { showResult(res); } }, skipping ? 150 : 700 / speed);
+    });
+  }
+
+  // Replays the recorded hits one by one: lunge, flash, damage number, health bar.
+  async function playBattle(res, run) {
+    var ev = res.events;
+    var names = { p: res.units.player, e: res.units.enemy };
+    for (var k = 0; k < ev.length; k++) {
+      if (run !== battleRun) { return false; }
+      if (skipping) { break; }
+      var e = ev[k];
+      if (e.t === 'round') {
+        el('b-round').textContent = 'Round ' + e.n;
+        await sleep(300 / speed);
+      } else if (e.t === 'hit') {
+        var otherSide = e.side === 'p' ? 'e' : 'p';
+        var from = unitEl(e.side, e.from), to = unitEl(otherSide, e.to);
+        if (!from || !to) { continue; }
+        var fc = from.querySelector('.bu-card');
+        var fr = fc.getBoundingClientRect(), tr = to.querySelector('.bu-card').getBoundingClientRect();
+        var dx = (tr.left + tr.width / 2) - (fr.left + fr.width / 2);
+        var dy = (tr.top + tr.height / 2) - (fr.top + fr.height / 2);
+        from.style.zIndex = 5;
+        fc.style.transform = 'translate(' + (dx * 0.7) + 'px,' + (dy * 0.7) + 'px) scale(1.1)';
+        el('b-log').textContent = names[e.side][e.from].name + ' hits ' + names[otherSide][e.to].name + ' for ' + e.dmg +
+          (e.mult > 1 ? ' - strong!' : (e.mult < 1 ? ' - weak' : ''));
+        await sleep(170 / speed);
+        if (run !== battleRun) { return false; }
+        to.classList.add('hit');
+        spawnDamage(to, e);
+        setHp(otherSide, e.to, e.hp);
+        await sleep(300 / speed);
+        to.classList.remove('hit');
+        fc.style.transform = '';
+        await sleep(150 / speed);
+        from.style.zIndex = '';
+      }
+    }
+    if (run !== battleRun) { return false; }
+    if (skipping) {
+      // Jump straight to the end: apply the last known health of every unit.
+      var last = {};
+      ev.forEach(function (x) { if (x.t === 'hit') { last[(x.side === 'p' ? 'e' : 'p') + x.to] = x.hp; } });
+      Object.keys(last).forEach(function (key) { setHp(key.charAt(0), parseInt(key.slice(1), 10), last[key]); });
+      Array.prototype.forEach.call(el('screen').querySelectorAll('.bu-card'), function (c) { c.style.transform = ''; });
+    }
+    el('b-round').textContent = res.win ? 'Victory!' : 'Defeat';
+    return true;
+  }
+
+  // ---------- results screen ----------
+  function chestSvg() {
+    return '<svg viewBox="0 0 72 60" aria-hidden="true"><circle cx="36" cy="20" r="18" fill="#fff6c8" opacity=".35"/>' +
+      '<rect x="6" y="28" width="60" height="28" rx="4" fill="#7a4a1d" stroke="#f0b429" stroke-width="3"/>' +
+      '<path d="M6,28 Q36,2 66,28Z" fill="#9a5f26" stroke="#f0b429" stroke-width="3"/>' +
+      '<rect x="31" y="30" width="10" height="12" rx="2" fill="#f0b429"/></svg>';
+  }
+
+  function showResult(res) {
+    var st = res.stage;
+    var next = G.STAGES[st.index + 1] || null;
+    var html = '<div class="sc-head"><h2>' + (st.boss ? 'Chapter ' + st.chapter + ' boss' : 'Section ' + st.id) + '</h2></div><div class="sc-body">';
+    var foot = '';
+
+    if (!res.win) {
+      html += '<div class="res-title result-lose">Defeat</div>' +
+        '<div class="res-sub">Your party was wiped out. No stamina was spent.</div>' +
+        '<div class="panel muted">Try a different party. Bring cards of the element that is strong against these enemies, level your cards up with Fuse, or spend your attribute points.</div>';
+      foot = '<button class="btn secondary" data-action="res-quests">Quests</button>' +
+        '<button class="btn" data-action="res-party">Change party</button>';
+    } else {
+      var r = res.rewards;
+      html += '<div class="res-title result-win">Victory!</div><div class="res-sub">' +
+        (r.sectionCleared ? (st.boss ? 'Boss defeated! Chapter cleared.' : 'Section cleared!') :
+          (st.boss ? 'Boss defeated!' : 'Monster ' + res.fightNo + ' of ' + res.monsters + ' defeated')) +
+        (st.boss ? '' : '<br><span class="pips">' + pips(res.fightNo, res.monsters) + '</span>') + '</div>';
+      html += '<div class="panel"><div class="reward"><span>Experience</span><b>+' + r.exp + '</b></div>' +
+        '<div class="reward"><span>Gold</span><b>+' + r.gold + '</b></div>' +
+        (r.gems ? '<div class="reward"><span>Gems (first clear)</span><b>+' + r.gems + '</b></div>' : '') +
+        (r.cureWater ? '<div class="reward"><span>Cure Water</span><b>+' + r.cureWater + '</b></div>' : '') + '</div>';
+      if (r.levelsGained) {
+        html += '<div class="levelup">Level up! You are now level ' + state.level + '.<br>+' + (r.levelsGained * D.CONFIG.pointsPerLevel) + ' attribute points. Stamina refilled.</div>';
+      }
+      if (r.chest) {
+        html += '<div class="panel chest">' + chestSvg() + '<b>Treasure chest!</b>' +
+          (r.chestGold ? '<div class="muted">+' + r.chestGold + ' gold</div>' : '') + '</div>';
+      }
+      if (r.cards.length) {
+        html += '<h3 style="text-align:center">You found</h3><div class="found">' + r.cards.map(function (c) { return cardHtml(c); }).join('') + '</div>';
+      }
+      var again = (r.sectionCleared && next) ? 'res-next' : 'res-again';
+      foot = '<button class="btn secondary" data-action="res-quests">Quests</button>' +
+        '<button class="btn secondary" data-action="res-party">Change party</button>' +
+        '<button class="btn" data-action="' + again + '">' + (again === 'res-next' ? 'Next section' : 'Fight again') + '</button>';
+    }
+    html += '</div><div class="sc-foot" style="flex-wrap:wrap">' + foot + '</div>';
+    openScreen(html);
+    render();
+  }
+
+  // ---------- modals ----------
   function showCardDetail(uid) {
     var card = G.findCard(state, uid);
     if (!card) { closeModal(); return; }
     var def = D.CARD_BY_ID[card.cardId];
     var st = G.cardStats(card);
     var inDeck = state.deck.indexOf(uid) !== -1;
-    var html = '<div class="card-large-wrap" style="width:150px;margin:0 auto 10px">' + cardHtml(card) + '</div>' +
+    var html = '<div style="width:150px;margin:0 auto 10px">' + cardHtml(card) + '</div>' +
       '<h2 style="text-align:center">' + def.name + '</h2>' +
-      '<p class="muted" style="text-align:center">' + D.ELEMENTS[def.element].icon + ' ' + D.ELEMENTS[def.element].name +
+      '<p class="muted" style="text-align:center">' + icon(def.element) + ' ' + D.ELEMENTS[def.element].name +
       ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
       '<div class="panel">Level ' + card.level + ' / ' + st.maxLevel + (card.level < st.maxLevel ? ' &middot; exp ' + card.exp + ' / ' + G.cardExpToNext(card) : ' (max)') +
       '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; HP ' + st.hp + '</div>' +
@@ -246,7 +536,7 @@
       '<div class="card-grid">';
     var mats = sortedCards(state.cards, 'rarity').filter(function (c) { return c.uid !== baseUid && state.deck.indexOf(c.uid) === -1; });
     mats.forEach(function (c) {
-      html += cardHtml(c, fuseSel.indexOf(c.uid) !== -1 ? 'selected' : '').replace('class="card', 'data-action="fuse-toggle" data-base="' + baseUid + '" class="card');
+      html += cardHtml(c, fuseSel.indexOf(c.uid) !== -1 ? 'selected' : '', 'data-action="fuse-toggle" data-base="' + baseUid + '"');
     });
     if (!mats.length) { html += '<p class="muted">No spare cards. Clear quests or summon more.</p>'; }
     html += '</div><p class="row"><button class="btn" data-action="fuse-confirm" data-uid="' + baseUid + '"' + (fuseSel.length ? '' : ' disabled') + '>Fuse</button>' +
@@ -264,7 +554,7 @@
     } else {
       html += '<p class="muted">Uses up another copy of the same card (not in your deck) and ' + G.evolveCost(card) + ' gold. Raises the level cap by 10 and boosts stats by 30%.</p><div class="card-grid">';
       var copies = state.cards.filter(function (c) { return c.cardId === card.cardId && c.uid !== uid && state.deck.indexOf(c.uid) === -1; });
-      copies.forEach(function (c) { html += cardHtml(c).replace('class="card', 'data-action="evolve-pick" data-base="' + uid + '" class="card'); });
+      copies.forEach(function (c) { html += cardHtml(c, '', 'data-action="evolve-pick" data-base="' + uid + '"'); });
       if (!copies.length) { html += '<p class="muted">You need a second copy of this card.</p>'; }
       html += '</div>';
     }
@@ -292,16 +582,61 @@
     switch (name) {
       case 'close': closeModal(); break;
 
-      case 'play':
-        res = G.playStage(state, node.getAttribute('data-stage'));
+      // quests and battles
+      case 'enter': {
+        var sid = node.getAttribute('data-stage');
+        if (!G.isUnlocked(state, sid)) { toast('Clear the previous section first.'); break; }
+        showParty(sid, false);
+        break;
+      }
+      case 'party-back': closeScreen(); break;
+      case 'party-toggle': {
+        var pi = party.indexOf(uid);
+        if (pi !== -1) { party.splice(pi, 1); }
+        else if (party.length >= D.CONFIG.maxDeckSize) { toast('A party holds at most ' + D.CONFIG.maxDeckSize + ' cards.'); break; }
+        else { party.push(uid); }
+        renderParty();
+        break;
+      }
+      case 'party-lead': {
+        var li = party.indexOf(uid);
+        if (li > 0) { party.splice(li, 1); party.unshift(uid); }
+        renderParty();
+        break;
+      }
+      case 'party-auto': party = G.bestDeck(state); renderParty(); break;
+      case 'party-go':
+        res = G.fight(state, partyStage, { deck: party });
         if (!res.ok) { toast(res.error); break; }
-        save(); render(); showBattle(res);
+        save();
+        startBattle(res);
+        break;
+      case 'speed': speed = parseInt(node.getAttribute('data-s'), 10); updateSpeedButtons(); break;
+      case 'skip': skipping = true; break;
+      case 'res-quests': closeScreen(); break;
+      case 'res-party': showParty(current.stage.id, false); break;
+      case 'res-next': showParty(G.STAGES[current.stage.index + 1].id, false); break;
+      case 'res-again':
+        res = G.fight(state, current.stage.id, {});
+        if (!res.ok) { toast(res.error); break; }
+        save();
+        startBattle(res);
+        break;
+      case 'point':
+        res = G.spendPoint(state, node.getAttribute('data-kind'));
+        if (!res.ok) { toast(res.error); break; }
+        save(); render();
+        break;
+      case 'curewater':
+        res = G.useCureWater(state);
+        if (!res.ok) { toast(res.error); break; }
+        save(); render(); toast('Stamina refilled.');
         break;
 
       case 'sort': cardSort = node.value; render(); break;
-
       case 'card-open': showCardDetail(uid); break;
 
+      // deck tab
       case 'deck-toggle': {
         var deck = state.deck.slice();
         var idx = deck.indexOf(uid);
@@ -311,20 +646,14 @@
         save(); render();
         break;
       }
-      case 'deck-clear': G.setDeck(state, []); save(); render(); break;
-      case 'deck-auto': {
-        var cap = G.deckCostCap(state.level), picked = [], total = 0;
-        var byPower = state.cards.slice().sort(function (a, b) {
-          var sa = G.cardStats(a), sb = G.cardStats(b);
-          return (sb.atk + sb.hp / 4) - (sa.atk + sa.hp / 4);
-        });
-        byPower.forEach(function (c) {
-          var cost = G.cardStats(c).cost;
-          if (picked.length < D.CONFIG.maxDeckSize && total + cost <= cap) { picked.push(c.uid); total += cost; }
-        });
-        G.setDeck(state, picked); save(); render();
+      case 'deck-lead': {
+        var d2 = state.deck.slice();
+        var j = d2.indexOf(uid);
+        if (j > 0) { d2.splice(j, 1); d2.unshift(uid); G.setDeck(state, d2); save(); render(); }
         break;
       }
+      case 'deck-clear': G.setDeck(state, []); save(); render(); break;
+      case 'deck-auto': G.setDeck(state, G.bestDeck(state)); save(); render(); break;
 
       case 'summon': {
         res = G.summon(state, parseInt(node.getAttribute('data-count'), 10));
@@ -363,6 +692,7 @@
         save(); render(); closeModal(); toast('Sold for ' + res.gold + ' gold');
         break;
 
+      // more tab
       case 'export': el('save-box').value = G.serialize(state); break;
       case 'import': {
         var s = G.deserialize(el('save-box').value);
@@ -372,6 +702,7 @@
       }
       case 'gems': state.gems += 1000; save(); render(); break;
       case 'gold': state.gold += 5000; save(); render(); break;
+      case 'stamina-fill': state.stamina = G.staminaCap(state); save(); render(); break;
       case 'reset': confirmModal('This deletes your whole game and starts over.', 'reset-confirm'); break;
       case 'reset-confirm': state = G.newGame(); save(); closeModal(); render(); toast('Game reset.'); break;
     }
@@ -383,7 +714,7 @@
     if (tab) { currentTab = tab.getAttribute('data-tab'); render(); return; }
     if (e.target.id === 'modal-backdrop') { closeModal(); return; }
     var node = e.target.closest ? e.target.closest('[data-action]') : null;
-    if (node && node.tagName !== 'SELECT') { act(node.getAttribute('data-action'), node); }
+    if (node && node.tagName !== 'SELECT' && !node.disabled) { act(node.getAttribute('data-action'), node); }
   });
   document.addEventListener('change', function (e) {
     if (e.target.tagName === 'SELECT' && e.target.getAttribute('data-action')) {

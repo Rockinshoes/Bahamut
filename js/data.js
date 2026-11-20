@@ -3,8 +3,9 @@
  * Edit this file to add cards or change balance. No other file needs to change
  * when you add a card (just add a line to the CARD_LIST below).
  *
- * Art: put your own image at  assets/cards/<card-id>.png  and it will show up
- * automatically. Without an image, a colored placeholder is drawn.
+ * Art: the game draws placeholder art for every card automatically (js/art.js).
+ * To use your own, put an image at  assets/cards/<card-id>.png  and it replaces
+ * the placeholder.
  */
 var GameData = (function () {
   'use strict';
@@ -27,37 +28,38 @@ var GameData = (function () {
   };
   var RARITY_ORDER = ['N', 'R', 'SR', 'SSR'];
 
-  // [id, name, element, rarity]
+  // [id, name, element, rarity, art style]
+  // Art styles used by the placeholder art: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
   var CARD_LIST = [
-    ['ember-imp',         'Ember Imp',         'fire',  'N'],
-    ['cinder-archer',     'Cinder Archer',     'fire',  'R'],
-    ['ashen-duelist',     'Ashen Duelist',     'fire',  'R'],
-    ['flame-warden',      'Flame Warden',      'fire',  'SR'],
-    ['pyre-sovereign',    'Pyre Sovereign',    'fire',  'SSR'],
+    ['ember-imp',         'Ember Imp',         'fire',  'N',   'sprite'],
+    ['cinder-archer',     'Cinder Archer',     'fire',  'R',   'archer'],
+    ['ashen-duelist',     'Ashen Duelist',     'fire',  'R',   'knight'],
+    ['flame-warden',      'Flame Warden',      'fire',  'SR',  'knight'],
+    ['pyre-sovereign',    'Pyre Sovereign',    'fire',  'SSR', 'dragon'],
 
-    ['brook-sprite',      'Brook Sprite',      'water', 'N'],
-    ['tide-caller',       'Tide Caller',       'water', 'R'],
-    ['frost-sentinel',    'Frost Sentinel',    'water', 'R'],
-    ['abyss-knight',      'Abyss Knight',      'water', 'SR'],
-    ['tempest-leviathan', 'Tempest Leviathan', 'water', 'SSR'],
+    ['brook-sprite',      'Brook Sprite',      'water', 'N',   'sprite'],
+    ['tide-caller',       'Tide Caller',       'water', 'R',   'mage'],
+    ['frost-sentinel',    'Frost Sentinel',    'water', 'R',   'beast'],
+    ['abyss-knight',      'Abyss Knight',      'water', 'SR',  'tyrant'],
+    ['tempest-leviathan', 'Tempest Leviathan', 'water', 'SSR', 'dragon'],
 
-    ['breeze-pixie',      'Breeze Pixie',      'wind',  'N'],
-    ['reed-skirmisher',   'Reed Skirmisher',   'wind',  'R'],
-    ['storm-falconer',    'Storm Falconer',    'wind',  'R'],
-    ['cyclone-dancer',    'Cyclone Dancer',    'wind',  'SR'],
-    ['skyfather-zephyr',  'Skyfather Zephyr',  'wind',  'SSR'],
+    ['breeze-pixie',      'Breeze Pixie',      'wind',  'N',   'sprite'],
+    ['reed-skirmisher',   'Reed Skirmisher',   'wind',  'R',   'archer'],
+    ['storm-falconer',    'Storm Falconer',    'wind',  'R',   'beast'],
+    ['cyclone-dancer',    'Cyclone Dancer',    'wind',  'SR',  'mage'],
+    ['skyfather-zephyr',  'Skyfather Zephyr',  'wind',  'SSR', 'seraph'],
 
-    ['dawn-acolyte',      'Dawn Acolyte',      'light', 'N'],
-    ['lantern-cleric',    'Lantern Cleric',    'light', 'R'],
-    ['sunblade-paladin',  'Sunblade Paladin',  'light', 'R'],
-    ['halo-seraph',       'Halo Seraph',       'light', 'SR'],
-    ['radiant-archon',    'Radiant Archon',    'light', 'SSR'],
+    ['dawn-acolyte',      'Dawn Acolyte',      'light', 'N',   'sprite'],
+    ['lantern-cleric',    'Lantern Cleric',    'light', 'R',   'mage'],
+    ['sunblade-paladin',  'Sunblade Paladin',  'light', 'R',   'knight'],
+    ['halo-seraph',       'Halo Seraph',       'light', 'SR',  'seraph'],
+    ['radiant-archon',    'Radiant Archon',    'light', 'SSR', 'seraph'],
 
-    ['shade-whelp',       'Shade Whelp',       'dark',  'N'],
-    ['gloom-thief',       'Gloom Thief',       'dark',  'R'],
-    ['hollow-reaver',     'Hollow Reaver',     'dark',  'R'],
-    ['night-sorceress',   'Night Sorceress',   'dark',  'SR'],
-    ['void-tyrant',       'Void Tyrant',       'dark',  'SSR']
+    ['shade-whelp',       'Shade Whelp',       'dark',  'N',   'sprite'],
+    ['gloom-thief',       'Gloom Thief',       'dark',  'R',   'archer'],
+    ['hollow-reaver',     'Hollow Reaver',     'dark',  'R',   'knight'],
+    ['night-sorceress',   'Night Sorceress',   'dark',  'SR',  'mage'],
+    ['void-tyrant',       'Void Tyrant',       'dark',  'SSR', 'tyrant']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
@@ -68,6 +70,7 @@ var GameData = (function () {
       name: c[1],
       element: c[2],
       rarity: c[3],
+      style: c[4],
       atk: Math.round(r.atk * e.atkMod),
       hp: Math.round(r.hp * e.hpMod),
       cost: r.cost
@@ -76,17 +79,24 @@ var GameData = (function () {
   var CARD_BY_ID = {};
   CARDS.forEach(function (c) { CARD_BY_ID[c.id] = c; });
 
-  // Quests. Each chapter has 5 stages; stage 5 is a boss.
-  // dropWeights = chance weights for the card dropped when you clear a stage.
+  // Quests. Each chapter has 5 sections. Sections 1-4: beat 3 monsters, then a treasure
+  // chest opens. Section 5 is the chapter boss.
+  // dropWeights = chance weights for the card dropped from chests and boss battles.
   var CHAPTERS = [
     { id: 1, name: 'The Verdant Frontier', element: 'wind',
-      enemies: ['Thornback Boar', 'Moss Brigand', 'Wild Gale Hawk', 'Bramble Witch'], boss: 'Elder Treant',
+      enemies: [{ name: 'Thornback Boar', style: 'beast' }, { name: 'Moss Brigand', style: 'archer' },
+                { name: 'Wild Gale Hawk', style: 'beast' }, { name: 'Bramble Witch', style: 'mage' }],
+      boss: { name: 'Elder Treant', style: 'tyrant' },
       dropWeights: { N: 70, R: 27, SR: 3, SSR: 0 } },
     { id: 2, name: 'Cinder Peaks', element: 'fire',
-      enemies: ['Magma Crawler', 'Ash Raider', 'Smoldering Wisp', 'Slag Golem'], boss: 'Caldera Drake',
+      enemies: [{ name: 'Magma Crawler', style: 'beast' }, { name: 'Ash Raider', style: 'knight' },
+                { name: 'Smoldering Wisp', style: 'sprite' }, { name: 'Slag Golem', style: 'tyrant' }],
+      boss: { name: 'Caldera Drake', style: 'dragon' },
       dropWeights: { N: 40, R: 45, SR: 14, SSR: 1 } },
     { id: 3, name: 'The Hollow Sanctum', element: 'dark',
-      enemies: ['Grave Warden', 'Dusk Stalker', 'Hollow Priest', 'Wailing Shade'], boss: 'The Pale Regent',
+      enemies: [{ name: 'Grave Warden', style: 'knight' }, { name: 'Dusk Stalker', style: 'beast' },
+                { name: 'Hollow Priest', style: 'mage' }, { name: 'Wailing Shade', style: 'sprite' }],
+      boss: { name: 'The Pale Regent', style: 'seraph' },
       dropWeights: { N: 20, R: 45, SR: 30, SSR: 5 } }
   ];
   var STAGES_PER_CHAPTER = 5;
@@ -105,6 +115,14 @@ var GameData = (function () {
     firstClearGems: 30,
     firstClearBossGems: 100,
     battleMaxRounds: 40,
+    monstersPerSection: 3,           // monsters to beat before the chest opens
+    monsterDropChance: 0.2,          // chance a defeated monster drops a card
+    chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
+    leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and HP
+    pointsPerLevel: 3,               // attribute points you get on each level-up
+    staminaPerPoint: 2,              // each Stamina point: +2 max stamina
+    atkPctPerPoint: 2,               // each ATK PWR point: +2% team ATK
+    hpPctPerPoint: 2,                // each DEF PWR point: +2% team HP
     starterCards: ['cinder-archer', 'tide-caller', 'breeze-pixie', 'dawn-acolyte', 'shade-whelp']
   };
 

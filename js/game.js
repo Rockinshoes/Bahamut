@@ -35,7 +35,8 @@ var Game = (function () {
   function nowMs(now) { return (typeof now === 'number') ? now : Date.now(); }
 
   // ---------- player progression ----------
-  function maxStamina(level) { return Math.min(80, 20 + 2 * (level - 1)); }
+  function maxStamina(level, bonus) { return Math.min(100, 20 + 2 * (level - 1) + (bonus || 0)); }
+  function staminaCap(state) { return maxStamina(state.level, state.attr.stamina * CFG.staminaPerPoint); }
   function expToNext(level) { return 60 * level; }
   function deckCostCap(level) { return 24 + 2 * level; }
 
@@ -65,7 +66,7 @@ var Game = (function () {
     opts = opts || {};
     var t = nowMs(opts.now);
     var state = {
-      version: 1,
+      version: 2,
       gems: CFG.startGems,
       gold: CFG.startGold,
       level: 1,
@@ -75,7 +76,11 @@ var Game = (function () {
       nextUid: 1,
       cards: [],
       deck: [],
-      cleared: {},
+      cleared: {},          // section id -> true once the section has been cleared
+      progress: {},         // section id -> total monsters beaten there
+      attr: { stamina: 0, atk: 0, hp: 0 },
+      attrPoints: 0,
+      items: { cureWater: 0 },
       pulls: 0
     };
     CFG.starterCards.forEach(function (id) {
@@ -94,8 +99,8 @@ var Game = (function () {
 
   function regenStamina(state, now) {
     var t = nowMs(now);
-    var max = maxStamina(state.level);
-    if (state.stamina >= max) { state.stamina = Math.max(state.stamina, max); state.staminaAt = t; return state; }
+    var max = staminaCap(state);
+    if (state.stamina >= max) { state.staminaAt = t; return state; }
     var gained = Math.floor((t - state.staminaAt) / CFG.staminaRegenMs);
     if (gained > 0) {
       state.stamina = Math.min(max, state.stamina + gained);
@@ -106,9 +111,33 @@ var Game = (function () {
   }
 
   function msUntilNextStamina(state, now) {
-    var max = maxStamina(state.level);
-    if (state.stamina >= max) { return 0; }
+    if (state.stamina >= staminaCap(state)) { return 0; }
     return Math.max(0, CFG.staminaRegenMs - (nowMs(now) - state.staminaAt));
+  }
+
+  // ---------- attribute points and items ----------
+  function spendPoint(state, kind) {
+    if (!state.attr.hasOwnProperty(kind)) { return { ok: false, error: 'Unknown attribute.' }; }
+    if (state.attrPoints < 1) { return { ok: false, error: 'No attribute points to spend.' }; }
+    state.attrPoints--;
+    state.attr[kind]++;
+    if (kind === 'stamina') { state.stamina += CFG.staminaPerPoint; }
+    return { ok: true };
+  }
+
+  function useCureWater(state) {
+    if (state.items.cureWater < 1) { return { ok: false, error: 'You have no Cure Water.' }; }
+    if (state.stamina >= staminaCap(state)) { return { ok: false, error: 'Your stamina is already full.' }; }
+    state.items.cureWater--;
+    state.stamina = staminaCap(state);
+    return { ok: true };
+  }
+
+  function teamBonus(state) {
+    return {
+      atk: 1 + state.attr.atk * CFG.atkPctPerPoint / 100,
+      hp: 1 + state.attr.hp * CFG.hpPctPerPoint / 100
+    };
   }
 
   // ---------- summoning (gacha) ----------
@@ -133,8 +162,7 @@ var Game = (function () {
     }
     var got = rarities.map(function (r) {
       var def = pickCardOfRarity(r, rand);
-      var card = addCard(state, def.id);
-      return card;
+      return addCard(state, def.id);
     });
     state.pulls += count;
     return { ok: true, cards: got };
@@ -161,6 +189,20 @@ var Game = (function () {
     if (cost > cap) { return { ok: false, error: 'Deck cost ' + cost + ' is over your limit of ' + cap + '.' }; }
     state.deck = uids.slice();
     return { ok: true, cost: cost, cap: cap };
+  }
+
+  // The strongest legal party, by raw power.
+  function bestDeck(state) {
+    var cap = deckCostCap(state.level), picked = [], total = 0;
+    var byPower = state.cards.slice().sort(function (a, b) {
+      var sa = cardStats(a), sb = cardStats(b);
+      return (sb.atk + sb.hp / 4) - (sa.atk + sa.hp / 4);
+    });
+    byPower.forEach(function (c) {
+      var cost = cardStats(c).cost;
+      if (picked.length < CFG.maxDeckSize && total + cost <= cap) { picked.push(c.uid); total += cost; }
+    });
+    return picked;
   }
 
   // ---------- fusion, evolution, selling ----------
@@ -271,7 +313,7 @@ var Game = (function () {
     return { ok: true, gold: total };
   }
 
-  // ---------- battles ----------
+  // ---------- quests ----------
   function elementMult(attacker, defender) {
     if (D.ELEMENTS[attacker].beats === defender) { return 1.5; }
     if (D.ELEMENTS[defender].beats === attacker) { return 0.75; }
@@ -282,10 +324,13 @@ var Game = (function () {
     var list = [], gi = 0;
     D.CHAPTERS.forEach(function (ch) {
       for (var n = 1; n <= D.STAGES_PER_CHAPTER; n++) {
+        var boss = n === D.STAGES_PER_CHAPTER;
         list.push({
           id: ch.id + '-' + n, chapter: ch.id, num: n, index: gi,
-          boss: n === D.STAGES_PER_CHAPTER,
-          staminaCost: 3 + Math.floor(gi / 2) + (n === D.STAGES_PER_CHAPTER ? 2 : 0)
+          boss: boss,
+          monsters: boss ? 1 : CFG.monstersPerSection,
+          // Stamina spent per battle.
+          staminaCost: boss ? 3 + 2 * ch.id : ch.id
         });
         gi++;
       }
@@ -305,53 +350,92 @@ var Game = (function () {
     return st.index === 0 || !!state.cleared[STAGES[st.index - 1].id];
   }
 
-  function stageEnemies(stage) {
+  // How many monsters of this section you have beaten in the current run (0 .. monsters).
+  function sectionProgress(state, stageId) {
+    var st = getStage(stageId);
+    var count = state.progress[stageId] || 0;
+    if (!state.cleared[stageId]) { return Math.min(count, st.monsters); }
+    return count % st.monsters;
+  }
+
+  // Which fight of the section comes next (1-based).
+  function nextFightNo(state, stageId) { return sectionProgress(state, stageId) + 1; }
+
+  function stageEnemies(stage, fightNo) {
+    fightNo = fightNo || 1;
     var ch = D.CHAPTERS[stage.chapter - 1];
-    var power = 1 + 0.4 * stage.index;
+    var power = (1 + 0.4 * stage.index) * (1 + 0.05 * (fightNo - 1));
     var count = stage.boss ? 4 : (stage.num >= 3 ? 3 : 2);
+    var elems = [ch.element, ch.element, 'light', 'water', 'fire', 'wind', 'dark'];
     var list = [];
     for (var i = 0; i < count; i++) {
-      var isBoss = stage.boss && i === count - 1;
-      // Mostly the chapter's element, with a little variety.
-      var elems = [ch.element, ch.element, 'light', 'water', 'fire', 'wind', 'dark'];
-      var element = isBoss ? ch.element : elems[(stage.index + i) % elems.length];
+      var isBoss = stage.boss && i === 0;
+      var def = isBoss ? ch.boss : ch.enemies[(stage.index + i + fightNo) % ch.enemies.length];
       var mult = isBoss ? 1.8 : 1;
+      var hp = Math.round(110 * power * mult);
       list.push({
-        name: isBoss ? ch.boss : ch.enemies[(stage.index + i) % ch.enemies.length],
-        element: element,
-        hp: Math.round(110 * power * mult),
+        name: def.name,
+        style: def.style,
+        boss: isBoss,
+        element: isBoss ? ch.element : elems[(stage.index + i + fightNo) % elems.length],
+        hp: hp, maxHp: hp,
         atk: Math.round(14 * power * (isBoss ? 1.5 : 1))
       });
     }
     return list;
   }
 
+  // Turns your party cards into battle units. The first card is the leader.
+  function buildTeam(state, uids) {
+    var bonus = teamBonus(state);
+    return uids.map(function (uid, i) {
+      var c = findCard(state, uid);
+      var def = D.CARD_BY_ID[c.cardId];
+      var s = cardStats(c);
+      var lead = (i === 0) ? CFG.leaderMult : 1;
+      var hp = Math.round(s.hp * lead * bonus.hp);
+      return {
+        name: def.name, element: def.element, cardId: def.id, rarity: def.rarity, style: def.style,
+        level: c.level, evo: c.evo, leader: i === 0,
+        atk: Math.round(s.atk * lead * bonus.atk), hp: hp, maxHp: hp
+      };
+    });
+  }
+
+  function snapshot(units) { return units.map(function (u) { var c = {}; for (var k in u) { c[k] = u[k]; } return c; }); }
+
+  // Runs a whole battle instantly and records every hit as an event, so the screen can
+  // replay it. Events: {t:'round', n}, {t:'hit', side:'p'|'e', from, to, dmg, mult, hp, dead}.
   function simulateBattle(playerUnits, enemyUnits, rand) {
     rand = rand || Math.random;
-    var log = [];
+    var log = [], events = [];
     function alive(side) { return side.filter(function (u) { return u.hp > 0; }); }
-    function act(unit, targets) {
+    function act(unit, side, mySide, targets, theirSide) {
       var tgt = targets[Math.floor(rand() * targets.length)];
       var mult = elementMult(unit.element, tgt.element);
       var dmg = Math.max(1, Math.round(unit.atk * mult * (0.9 + 0.2 * rand())));
       tgt.hp = Math.max(0, tgt.hp - dmg);
+      events.push({ t: 'hit', side: side, from: mySide.indexOf(unit), to: theirSide.indexOf(tgt), dmg: dmg, mult: mult, hp: tgt.hp, dead: tgt.hp === 0 });
       log.push(unit.name + ' hits ' + tgt.name + ' for ' + dmg +
         (mult > 1 ? ' (strong!)' : (mult < 1 ? ' (weak)' : '')) + (tgt.hp === 0 ? ' - defeated' : ''));
     }
     var rounds = 0;
     while (rounds < CFG.battleMaxRounds && alive(playerUnits).length && alive(enemyUnits).length) {
       rounds++;
+      events.push({ t: 'round', n: rounds });
       log.push('-- Round ' + rounds + ' --');
       alive(playerUnits).forEach(function (u) {
         var t = alive(enemyUnits);
-        if (t.length) { act(u, t); }
+        if (t.length) { act(u, 'p', playerUnits, t, enemyUnits); }
       });
       alive(enemyUnits).forEach(function (u) {
         var t = alive(playerUnits);
-        if (t.length) { act(u, t); }
+        if (t.length) { act(u, 'e', enemyUnits, t, playerUnits); }
       });
     }
-    return { win: alive(enemyUnits).length === 0 && alive(playerUnits).length > 0, rounds: rounds, log: log };
+    var win = alive(enemyUnits).length === 0 && alive(playerUnits).length > 0;
+    events.push({ t: 'end', win: win });
+    return { win: win, rounds: rounds, log: log, events: events };
   }
 
   function addPlayerExp(state, amount) {
@@ -361,52 +445,98 @@ var Game = (function () {
       state.exp -= expToNext(state.level);
       state.level++;
       levelsGained++;
-      state.stamina = maxStamina(state.level); // level-up refills stamina
+      state.attrPoints += CFG.pointsPerLevel;
+      state.stamina = staminaCap(state); // level-up refills stamina
       state.gems += 20;
     }
     return levelsGained;
   }
 
-  function playStage(state, stageId, rand, now) {
-    rand = rand || Math.random;
+  function dropCard(state, stage, rand) {
+    var ch = D.CHAPTERS[stage.chapter - 1];
+    var def = pickCardOfRarity(rollWeighted(ch.dropWeights, rand), rand);
+    return addCard(state, def.id);
+  }
+
+  // What the party-select screen needs to know about the next battle in a section.
+  function battleInfo(state, stageId) {
     var stage = getStage(stageId);
     if (!stage) { return { ok: false, error: 'Unknown stage.' }; }
-    if (!isUnlocked(state, stageId)) { return { ok: false, error: 'Clear the previous stage first.' }; }
-    if (!state.deck.length) { return { ok: false, error: 'Your deck is empty. Add cards in the Deck tab.' }; }
-    regenStamina(state, now);
+    if (!isUnlocked(state, stageId)) { return { ok: false, error: 'Clear the previous section first.' }; }
+    var fightNo = nextFightNo(state, stageId);
+    return { ok: true, stage: stage, fightNo: fightNo, monsters: stage.monsters, enemies: stageEnemies(stage, fightNo) };
+  }
+
+  // Fight the next monster (or boss) of a section. Pass opts.deck to choose the party.
+  // The result is applied right away; result.events is what the battle screen replays.
+  function fight(state, stageId, opts) {
+    opts = opts || {};
+    var rand = opts.rand || Math.random;
+    var info = battleInfo(state, stageId);
+    if (!info.ok) { return info; }
+    var stage = info.stage;
+    if (opts.deck) {
+      var set = setDeck(state, opts.deck);
+      if (!set.ok) { return set; }
+    }
+    if (!state.deck.length) { return { ok: false, error: 'Your party is empty. Add cards first.' }; }
+    regenStamina(state, opts.now);
     if (state.stamina < stage.staminaCost) { return { ok: false, error: 'Not enough stamina (need ' + stage.staminaCost + ').' }; }
 
-    var team = state.deck.map(function (uid) {
-      var c = findCard(state, uid);
-      var def = D.CARD_BY_ID[c.cardId];
-      var s = cardStats(c);
-      return { name: def.name, element: def.element, hp: s.hp, atk: s.atk };
-    });
-    var enemies = stageEnemies(stage).map(function (e) { return { name: e.name, element: e.element, hp: e.hp, atk: e.atk }; });
-    var result = simulateBattle(team, enemies, rand);
-    var out = { ok: true, win: result.win, rounds: result.rounds, log: result.log, stage: stage };
-
-    if (!result.win) { return out; } // a loss costs nothing
+    var team = buildTeam(state, state.deck);
+    var enemies = info.enemies;
+    var units = { player: snapshot(team), enemy: snapshot(enemies) };
+    var sim = simulateBattle(team, enemies, rand);
+    var out = {
+      ok: true, win: sim.win, rounds: sim.rounds, log: sim.log, events: sim.events,
+      units: units, stage: stage, fightNo: info.fightNo, monsters: info.monsters
+    };
+    if (!sim.win) { return out; } // a loss costs nothing
 
     // Spend stamina only on a win.
-    if (state.stamina >= maxStamina(state.level)) { state.staminaAt = nowMs(now); }
+    if (state.stamina >= staminaCap(state)) { state.staminaAt = nowMs(opts.now); }
     state.stamina -= stage.staminaCost;
 
     var gi = stage.index;
-    var rewards = { exp: 8 + 4 * gi, gold: 30 + 15 * gi, gems: 0, card: null, levelsGained: 0 };
-    if (!state.cleared[stage.id]) {
-      state.cleared[stage.id] = true;
-      rewards.gems = stage.boss ? CFG.firstClearBossGems : CFG.firstClearGems;
-      rewards.firstClear = true;
+    var rewards = {
+      exp: stage.staminaCost * 5,
+      gold: stage.boss ? 150 + 60 * gi : 12 + 6 * gi,
+      gems: 0, cards: [], chest: false, chestGold: 0, cureWater: 0,
+      levelsGained: 0, firstClear: false, sectionCleared: false
+    };
+
+    state.progress[stage.id] = (state.progress[stage.id] || 0) + 1;
+    var count = state.progress[stage.id];
+    var wasCleared = !!state.cleared[stage.id];
+
+    // Normal monsters sometimes drop a card.
+    if (!stage.boss && rand() < CFG.monsterDropChance) { rewards.cards.push(dropCard(state, stage, rand)); }
+
+    // Every 3rd monster opens a treasure chest; the boss always does.
+    if (count % stage.monsters === 0) {
+      rewards.chest = true;
+      if (stage.boss) {
+        rewards.cards.push(dropCard(state, stage, rand));
+        rewards.cureWater = 1;
+      } else {
+        rewards.chestGold = 40 + 20 * gi;
+        if (rand() < CFG.chestCardChance) { rewards.cards.push(dropCard(state, stage, rand)); }
+      }
     }
-    state.gold += rewards.gold;
+    if (count >= stage.monsters && !wasCleared) {
+      state.cleared[stage.id] = true;
+      rewards.sectionCleared = true;
+      rewards.firstClear = true;
+      rewards.gems = stage.boss ? CFG.firstClearBossGems : CFG.firstClearGems;
+    }
+
+    state.gold += rewards.gold + rewards.chestGold;
     state.gems += rewards.gems;
-    var ch = D.CHAPTERS[stage.chapter - 1];
-    var dropRarity = rollWeighted(ch.dropWeights, rand);
-    var dropDef = pickCardOfRarity(dropRarity, rand);
-    rewards.card = addCard(state, dropDef.id);
+    state.items.cureWater += rewards.cureWater;
     rewards.levelsGained = addPlayerExp(state, rewards.exp);
     out.rewards = rewards;
+    out.progress = sectionProgress(state, stage.id);
+    out.cleared = !!state.cleared[stage.id];
     return out;
   }
 
@@ -429,9 +559,17 @@ var Game = (function () {
     var maxUid = 0;
     out.cards.forEach(function (c) { if (c.uid > maxUid) { maxUid = c.uid; } });
     out.nextUid = Math.max(out.nextUid, maxUid + 1);
-    ['gems', 'gold', 'level', 'exp', 'stamina', 'staminaAt', 'pulls'].forEach(function (key) {
+    ['gems', 'gold', 'level', 'exp', 'stamina', 'staminaAt', 'pulls', 'attrPoints'].forEach(function (key) {
       if (typeof out[key] !== 'number' || !isFinite(out[key])) { out[key] = base[key]; }
     });
+    ['cleared', 'progress', 'attr', 'items'].forEach(function (key) {
+      if (!out[key] || typeof out[key] !== 'object' || Array.isArray(out[key])) { out[key] = base[key]; }
+    });
+    ['stamina', 'atk', 'hp'].forEach(function (key) {
+      if (typeof out.attr[key] !== 'number' || !isFinite(out.attr[key])) { out.attr[key] = 0; }
+    });
+    if (typeof out.items.cureWater !== 'number' || !isFinite(out.items.cureWater)) { out.items.cureWater = 0; }
+    out.version = 2;
     out.level = Math.max(1, Math.floor(out.level));
     return out;
   }
@@ -439,15 +577,17 @@ var Game = (function () {
   var api = {
     SAVE_KEY: SAVE_KEY, STAGES: STAGES,
     newGame: newGame, findCard: findCard, addCard: addCard,
-    maxStamina: maxStamina, expToNext: expToNext, deckCostCap: deckCostCap,
+    maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
+    spendPoint: spendPoint, useCureWater: useCureWater, teamBonus: teamBonus,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
-    deckCost: deckCost, setDeck: setDeck,
+    deckCost: deckCost, setDeck: setDeck, bestDeck: bestDeck,
     fusePreview: fusePreview, fuse: fuse, evolveCost: evolveCost, canEvolve: canEvolve, evolve: evolve,
     sellValue: sellValue, sell: sell,
     elementMult: elementMult, getStage: getStage, isUnlocked: isUnlocked, stageEnemies: stageEnemies,
-    simulateBattle: simulateBattle, playStage: playStage,
+    sectionProgress: sectionProgress, nextFightNo: nextFightNo, battleInfo: battleInfo,
+    buildTeam: buildTeam, simulateBattle: simulateBattle, fight: fight,
     serialize: serialize, deserialize: deserialize
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; }

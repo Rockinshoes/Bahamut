@@ -6,6 +6,7 @@
 var assert = require('assert');
 var G = require('../js/game.js');
 var D = require('../js/data.js');
+var Art = require('../js/art.js');
 
 var passed = 0;
 function test(name, fn) {
@@ -25,13 +26,24 @@ function seeded(seed) {
   };
 }
 
+// A game state with a team strong enough to win any stage.
+function strongState() {
+  var s = G.newGame({ now: 0 }); s.level = 30; s.stamina = 100;
+  s.cards = []; s.deck = [];
+  ['pyre-sovereign', 'halo-seraph', 'abyss-knight', 'cyclone-dancer', 'night-sorceress'].forEach(function (id) {
+    var c = G.addCard(s, id); c.level = 40; c.evo = 2; s.deck.push(c.uid);
+  });
+  return s;
+}
+
 console.log('Game data');
-test('every card has a unique id, valid element and rarity', function () {
+test('every card has a unique id, valid element, rarity and art style', function () {
   var ids = {};
   D.CARDS.forEach(function (c) {
     assert(!ids[c.id], 'duplicate id ' + c.id); ids[c.id] = true;
     assert(D.ELEMENTS[c.element], 'bad element on ' + c.id);
     assert(D.RARITIES[c.rarity], 'bad rarity on ' + c.id);
+    assert(c.style, 'missing art style on ' + c.id);
   });
 });
 test('summon rates add up to 100', function () {
@@ -45,6 +57,25 @@ test('starter cards exist and fit the starting deck cost limit', function () {
   assert(G.deckCost(s, s.deck) <= G.deckCostCap(s.level));
 });
 
+console.log('Placeholder art');
+test('every card and enemy gets a clean SVG drawing', function () {
+  D.CARDS.forEach(function (c) {
+    var svg = Art.card(c);
+    assert(svg.indexOf('<svg') === 0 && /<\/svg>$/.test(svg), c.id + ' is not an svg');
+    assert(!/NaN|undefined/.test(svg), c.id + ' has NaN/undefined in its drawing');
+  });
+  D.CHAPTERS.forEach(function (ch) {
+    ch.enemies.concat([ch.boss]).forEach(function (e) {
+      var svg = Art.enemy({ name: e.name, style: e.style, element: ch.element, boss: e === ch.boss });
+      assert(svg.indexOf('<svg') === 0 && !/NaN|undefined/.test(svg), e.name + ' drawing is broken');
+    });
+  });
+});
+test('different cards get different drawings', function () {
+  assert.notStrictEqual(Art.card(D.CARD_BY_ID['ember-imp']), Art.card(D.CARD_BY_ID['brook-sprite']));
+  assert.notStrictEqual(Art.card(D.CARD_BY_ID['cinder-archer']), Art.card(D.CARD_BY_ID['ashen-duelist']));
+});
+
 console.log('Stamina');
 test('stamina regenerates over time and caps at max', function () {
   var s = G.newGame({ now: 0 });
@@ -52,7 +83,7 @@ test('stamina regenerates over time and caps at max', function () {
   G.regenStamina(s, 5 * D.CONFIG.staminaRegenMs + 1000);
   assert.strictEqual(s.stamina, 5);
   G.regenStamina(s, 10000 * D.CONFIG.staminaRegenMs);
-  assert.strictEqual(s.stamina, G.maxStamina(1));
+  assert.strictEqual(s.stamina, G.staminaCap(s));
 });
 
 console.log('Summoning');
@@ -103,6 +134,14 @@ test('deck rejects too many cards, duplicates, unknown cards and over-cost decks
   var costly = [1, 2, 3].map(function () { return G.addCard(s, 'pyre-sovereign').uid; });
   var r = G.setDeck(s, costly); // 3 x 12 = 36 > 26
   assert(!r.ok && /over your limit/.test(r.error));
+});
+test('bestDeck picks a legal, strong party', function () {
+  var s = G.newGame({ now: 0 });
+  G.addCard(s, 'pyre-sovereign');
+  var picked = G.bestDeck(s);
+  assert(picked.length <= D.CONFIG.maxDeckSize);
+  assert(G.deckCost(s, picked) <= G.deckCostCap(s.level));
+  assert(G.setDeck(s, picked).ok);
 });
 
 console.log('Fusion, evolution, selling');
@@ -168,67 +207,161 @@ test('selling gives gold and removes the card', function () {
   assert(!G.sell(s, [s.deck[0]]).ok, 'deck cards cannot be sold');
 });
 
-console.log('Battles');
+console.log('Quests and battles');
 test('element advantage works both ways', function () {
   assert.strictEqual(G.elementMult('fire', 'wind'), 1.5);
   assert.strictEqual(G.elementMult('wind', 'fire'), 0.75);
   assert.strictEqual(G.elementMult('light', 'dark'), 1.5);
   assert.strictEqual(G.elementMult('fire', 'fire'), 1);
 });
-test('stages unlock in order', function () {
+test('sections unlock in order', function () {
   var s = G.newGame({ now: 0 });
   assert(G.isUnlocked(s, '1-1')); assert(!G.isUnlocked(s, '1-2'));
   s.cleared['1-1'] = true; assert(G.isUnlocked(s, '1-2'));
   assert(!G.isUnlocked(s, '2-1')); s.cleared['1-5'] = true; assert(G.isUnlocked(s, '2-1'));
 });
-test('a strong team beats stage 1-1 and gets rewards, stamina and first-clear gems', function () {
+test('a battle is recorded as replayable events that match the final result', function () {
+  var s = G.newGame({ now: 0 });
+  var r = G.fight(s, '1-1', { rand: seeded(3), now: 0 });
+  assert(r.ok && r.win);
+  var ev = r.events;
+  assert.strictEqual(ev[ev.length - 1].t, 'end');
+  assert.strictEqual(ev[ev.length - 1].win, r.win);
+  assert.strictEqual(ev[0].t, 'round');
+  var hits = ev.filter(function (e) { return e.t === 'hit'; });
+  assert(hits.length > 0);
+  // Replaying health from the events: every enemy ends at 0, and no hit targets a dead unit.
+  var hp = { p: r.units.player.map(function (u) { return u.maxHp; }), e: r.units.enemy.map(function (u) { return u.maxHp; }) };
+  hits.forEach(function (h) {
+    var side = h.side === 'p' ? 'e' : 'p';
+    assert(hp[side][h.to] > 0, 'hit on an already defeated unit');
+    hp[side][h.to] = Math.max(0, hp[side][h.to] - h.dmg);
+    assert.strictEqual(hp[side][h.to], h.hp, 'event hp does not match replayed hp');
+    assert.strictEqual(h.dead, h.hp === 0);
+  });
+  assert(hp.e.every(function (v) { return v === 0; }));
+  assert.strictEqual(r.units.enemy.length, G.stageEnemies(G.getStage('1-1'), 1).length);
+});
+test('a section needs 3 monsters, then the chest opens and the section is cleared', function () {
   var s = G.newGame({ now: 0 });
   var gems = s.gems, gold = s.gold, stamina = s.stamina;
-  var r = G.playStage(s, '1-1', seeded(3), 0);
-  assert(r.ok && r.win, 'starter team should win 1-1');
-  assert(s.gold > gold); assert.strictEqual(s.gems, gems + D.CONFIG.firstClearGems);
-  assert.strictEqual(s.stamina, stamina - G.getStage('1-1').staminaCost);
-  assert(s.cleared['1-1']);
-  assert(r.rewards.card && G.findCard(s, r.rewards.card.uid));
-  var again = G.playStage(s, '1-1', seeded(4), 0);
-  assert.strictEqual(s.gems, gems + D.CONFIG.firstClearGems, 'no gems on a repeat clear');
-  assert(again.ok);
+  var r1 = G.fight(s, '1-1', { rand: seeded(3), now: 0 });
+  assert(r1.ok && r1.win);
+  assert.strictEqual(r1.fightNo, 1); assert(!r1.rewards.chest); assert(!s.cleared['1-1']);
+  assert(s.gold > gold); assert.strictEqual(s.stamina, stamina - 1);
+  var r2 = G.fight(s, '1-1', { rand: seeded(4), now: 0 });
+  assert.strictEqual(r2.fightNo, 2); assert(!r2.rewards.chest);
+  var r3 = G.fight(s, '1-1', { rand: seeded(5), now: 0 });
+  assert.strictEqual(r3.fightNo, 3);
+  assert(r3.rewards.chest, 'chest should open on the 3rd monster');
+  assert(r3.rewards.chestGold > 0);
+  assert(r3.rewards.sectionCleared && s.cleared['1-1']);
+  assert.strictEqual(r3.rewards.gems, D.CONFIG.firstClearGems);
+  assert.strictEqual(s.gems, gems + D.CONFIG.firstClearGems);
+  assert(G.isUnlocked(s, '1-2'));
 });
-test('a loss costs no stamina and gives no rewards', function () {
+test('replaying a cleared section cycles through the monsters again, with no repeat first-clear gems', function () {
+  var s = G.newGame({ now: 0 }); s.stamina = 100;
+  for (var i = 0; i < 3; i++) { G.fight(s, '1-1', { rand: seeded(i + 10), now: 0 }); }
+  var gems = s.gems;
+  assert.strictEqual(G.sectionProgress(s, '1-1'), 0);
+  var r = G.fight(s, '1-1', { rand: seeded(20), now: 0 });
+  assert.strictEqual(r.fightNo, 1); assert(!r.rewards.firstClear); assert.strictEqual(s.gems, gems);
+  G.fight(s, '1-1', { rand: seeded(21), now: 0 });
+  var r3 = G.fight(s, '1-1', { rand: seeded(22), now: 0 });
+  assert(r3.rewards.chest, 'a chest opens every 3rd monster when farming');
+});
+test('a loss costs no stamina, gives no rewards and does not move progress', function () {
   var s = G.newGame({ now: 0 });
-  s.cleared['1-1'] = s.cleared['1-2'] = s.cleared['1-3'] = s.cleared['1-4'] = true;
+  ['1-1', '1-2', '1-3', '1-4'].forEach(function (id) { s.cleared[id] = true; });
   var stamina = s.stamina, gold = s.gold, cards = s.cards.length;
-  var r = G.playStage(s, '1-5', seeded(5), 0); // boss: the starter deck is too weak
-  assert(r.ok && !r.win);
+  var r = G.fight(s, '1-5', { rand: seeded(5), now: 0 }); // boss: the starter team is too weak
+  assert(r.ok && !r.win && !r.rewards);
   assert.strictEqual(s.stamina, stamina); assert.strictEqual(s.gold, gold); assert.strictEqual(s.cards.length, cards);
+  assert(!s.progress['1-5']);
 });
-test('cannot fight a locked stage, with an empty deck, or without stamina', function () {
+test('beating a boss gives a card, Cure Water and big first-clear gems', function () {
+  var s = strongState();
+  ['1-1', '1-2', '1-3', '1-4'].forEach(function (id) { s.cleared[id] = true; });
+  var gems = s.gems, cards = s.cards.length;
+  var r = G.fight(s, '1-5', { rand: seeded(8), now: 0 });
+  assert(r.ok && r.win);
+  assert(r.rewards.chest && r.rewards.cureWater === 1 && s.items.cureWater === 1);
+  assert(s.cards.length > cards, 'boss should drop a card');
+  assert.strictEqual(s.gems, gems + D.CONFIG.firstClearBossGems);
+  assert(G.isUnlocked(s, '2-1'));
+});
+test('Cure Water refills stamina, and only when you have some and are not full', function () {
   var s = G.newGame({ now: 0 });
-  assert(!G.playStage(s, '1-2', seeded(1), 0).ok);
-  s.stamina = 0; s.staminaAt = 0;
-  assert(!G.playStage(s, '1-1', seeded(1), 0).ok);
-  s.stamina = 20; s.deck = [];
-  assert(!G.playStage(s, '1-1', seeded(1), 0).ok);
+  assert(!G.useCureWater(s).ok, 'none owned');
+  s.items.cureWater = 1;
+  assert(!G.useCureWater(s).ok, 'stamina already full');
+  s.stamina = 2;
+  assert(G.useCureWater(s).ok);
+  assert.strictEqual(s.stamina, G.staminaCap(s)); assert.strictEqual(s.items.cureWater, 0);
 });
-test('levelling up refills stamina and grants gems', function () {
+test('you can choose the party for a battle; bad parties are refused and change nothing', function () {
+  var s = G.newGame({ now: 0 });
+  var extra = G.addCard(s, 'ember-imp');
+  var chosen = [extra.uid, s.deck[0]];
+  var r = G.fight(s, '1-1', { deck: chosen, rand: seeded(3), now: 0 });
+  assert(r.ok);
+  assert.deepStrictEqual(s.deck, chosen);
+  assert.strictEqual(r.units.player.length, 2);
+  assert.strictEqual(r.units.player[0].cardId, 'ember-imp');
+  var before = s.deck.slice();
+  var bad = G.fight(s, '1-1', { deck: [9999], rand: seeded(3), now: 0 });
+  assert(!bad.ok); assert.deepStrictEqual(s.deck, before);
+});
+test('the first card in the party is the leader and gets +20% ATK and HP', function () {
+  var s = G.newGame({ now: 0 });
+  var team = G.buildTeam(s, s.deck);
+  var st = G.cardStats(G.findCard(s, s.deck[0]));
+  assert(team[0].leader && !team[1].leader);
+  assert.strictEqual(team[0].atk, Math.round(st.atk * D.CONFIG.leaderMult));
+  assert.strictEqual(team[0].maxHp, Math.round(st.hp * D.CONFIG.leaderMult));
+  var st1 = G.cardStats(G.findCard(s, s.deck[1]));
+  assert.strictEqual(team[1].atk, st1.atk);
+});
+test('cannot fight a locked section, with an empty party, or without stamina', function () {
+  var s = G.newGame({ now: 0 });
+  assert(!G.fight(s, '1-2', { rand: seeded(1), now: 0 }).ok);
+  s.stamina = 0; s.staminaAt = 0;
+  assert(!G.fight(s, '1-1', { rand: seeded(1), now: 0 }).ok);
+  s.stamina = 20; s.deck = [];
+  assert(!G.fight(s, '1-1', { rand: seeded(1), now: 0 }).ok);
+});
+test('levelling up gives attribute points, refills stamina and grants gems', function () {
   var s = G.newGame({ now: 0 });
   s.exp = G.expToNext(1) - 1; s.stamina = 3;
   var gems = s.gems;
-  var r = G.playStage(s, '1-1', seeded(3), 0);
+  var r = G.fight(s, '1-1', { rand: seeded(3), now: 0 });
   assert(r.ok && r.win && r.rewards.levelsGained >= 1);
-  assert.strictEqual(s.level, 2); assert.strictEqual(s.stamina, G.maxStamina(2));
+  assert.strictEqual(s.level, 2); assert.strictEqual(s.stamina, G.staminaCap(s));
+  assert.strictEqual(s.attrPoints, D.CONFIG.pointsPerLevel);
   assert(s.gems > gems);
 });
+test('attribute points raise max stamina, team ATK and team HP', function () {
+  var s = G.newGame({ now: 0 });
+  assert(!G.spendPoint(s, 'atk').ok, 'no points yet');
+  s.attrPoints = 3;
+  var cap = G.staminaCap(s), atk0 = G.buildTeam(s, s.deck)[1].atk, hp0 = G.buildTeam(s, s.deck)[1].maxHp;
+  assert(G.spendPoint(s, 'stamina').ok);
+  assert.strictEqual(G.staminaCap(s), cap + D.CONFIG.staminaPerPoint);
+  assert(G.spendPoint(s, 'atk').ok); assert(G.spendPoint(s, 'hp').ok);
+  assert(G.buildTeam(s, s.deck)[1].atk > atk0); assert(G.buildTeam(s, s.deck)[1].maxHp > hp0);
+  assert.strictEqual(s.attrPoints, 0);
+  assert(!G.spendPoint(s, 'bogus').ok);
+});
 test('the whole game is winnable with a maxed team', function () {
-  var s = G.newGame({ now: 0 }); s.level = 30;
-  s.cards = []; s.deck = [];
-  ['pyre-sovereign', 'halo-seraph', 'abyss-knight', 'cyclone-dancer', 'night-sorceress'].forEach(function (id) {
-    var c = G.addCard(s, id); c.level = 40; c.evo = 2; s.deck.push(c.uid);
-  });
+  var s = strongState();
   G.STAGES.forEach(function (st) {
-    s.stamina = 80;
-    var r = G.playStage(s, st.id, seeded(11), 0);
-    assert(r.ok && r.win, 'should win ' + st.id);
+    for (var i = 0; i < st.monsters; i++) {
+      s.stamina = 100;
+      var r = G.fight(s, st.id, { rand: seeded(11 + i), now: 0 });
+      assert(r.ok && r.win, 'should win ' + st.id + ' fight ' + (i + 1));
+    }
+    assert(s.cleared[st.id], st.id + ' should be cleared');
   });
 });
 
@@ -236,11 +369,29 @@ console.log('Saving');
 test('save and load round-trips, and bad saves are rejected', function () {
   var s = G.newGame({ now: 0 });
   G.summon(s, 10, seeded(9));
+  G.fight(s, '1-1', { rand: seeded(2), now: 0 });
+  s.attr.atk = 2; s.items.cureWater = 3;
   var back = G.deserialize(G.serialize(s));
   assert.deepStrictEqual(back.cards, s.cards);
+  assert.deepStrictEqual(back.progress, s.progress);
+  assert.deepStrictEqual(back.attr, s.attr);
+  assert.strictEqual(back.items.cureWater, 3);
   assert.strictEqual(back.gems, s.gems);
   assert.strictEqual(G.deserialize('not json'), null);
   assert.strictEqual(G.deserialize('{"hello":1}'), null);
+});
+test('saves from the first version (no progress/attributes/items) still load', function () {
+  var s = G.newGame({ now: 0 });
+  var old = JSON.parse(JSON.stringify(s));
+  delete old.progress; delete old.attr; delete old.attrPoints; delete old.items; old.version = 1;
+  old.cleared = { '1-1': true };
+  var back = G.deserialize(JSON.stringify(old));
+  assert(back);
+  assert.deepStrictEqual(back.attr, { stamina: 0, atk: 0, hp: 0 });
+  assert.strictEqual(back.items.cureWater, 0);
+  assert.strictEqual(back.attrPoints, 0);
+  assert(back.cleared['1-1']);
+  assert(G.fight(back, '1-2', { rand: seeded(1), now: 0 }).ok, 'old save should be playable');
 });
 test('loading drops unknown cards and keeps new uids unique', function () {
   var s = G.newGame({ now: 0 });
