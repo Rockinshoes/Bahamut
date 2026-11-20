@@ -95,8 +95,9 @@
     });
   }
   function artFor(def) {
-    return A.card(def) + (artOk[def.id] ? '<img src="assets/cards/' + def.id + '.png" alt="">' : '');
+    return '<img src="' + A.cardUrl(def) + '" alt="">' + (artOk[def.id] ? '<img src="assets/cards/' + def.id + '.png" alt="">' : '');
   }
+  function enemyArt(u) { return '<img src="' + A.enemyUrl(u) + '" alt="">'; }
 
   // attrs: extra attributes for the card's outer tag; extra: extra markup placed inside the card.
   function cardHtml(card, cls, attrs, extra) {
@@ -302,7 +303,7 @@
       var f = D.FACTIONS[fid];
       var showcase = D.CARD_BY_ID[D.CONFIG.starterCards[fid][0]];
       html += '<div class="panel align-pick" style="border-left:4px solid ' + f.color + '">' +
-        '<div class="align-art"><div class="bu-card r-' + showcase.rarity + '"><div class="art">' + A.card(showcase) + '</div></div></div>' +
+        '<div class="align-art"><div class="bu-card r-' + showcase.rarity + '"><div class="art">' + artFor(showcase) + '</div></div></div>' +
         '<div class="grow"><b style="font-size:17px">' + icon(fid) + ' ' + f.name + '</b>' +
         '<p class="muted" style="margin:4px 0 8px">' + f.blurb + '</p>' +
         (freshGame ? '<p class="muted" style="margin:0 0 8px;font-size:12px">Starter pack: your champion, ' +
@@ -314,7 +315,7 @@
 
   // ---------- party select screen ----------
   function foeHtml(u) {
-    return '<div class="foe"><div class="bu-card r-' + (u.boss ? 'SSR' : 'R') + '"><div class="art">' + A.enemy(u) + '</div>' +
+    return '<div class="foe"><div class="bu-card r-' + (u.boss ? 'SSR' : 'R') + '"><div class="art">' + enemyArt(u) + '</div>' +
       '<span class="bu-el">' + icon(u.faction) + '</span><div class="bu-name">' + u.name + '</div></div></div>';
   }
 
@@ -391,7 +392,7 @@
 
   // ---------- battle screen ----------
   function unitHtml(u, side, i) {
-    var svg = side === 'p' ? artFor(D.CARD_BY_ID[u.cardId]) : A.enemy(u);
+    var svg = side === 'p' ? artFor(D.CARD_BY_ID[u.cardId]) : enemyArt(u);
     var rar = side === 'p' ? u.rarity : (u.boss ? 'SSR' : 'R');
     return '<div class="bu' + (u.boss ? ' boss' : '') + '" data-side="' + side + '" data-i="' + i + '">' +
       '<div class="bu-card r-' + rar + '"><div class="art">' + svg + '</div>' +

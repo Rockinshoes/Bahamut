@@ -112,6 +112,20 @@ test('every card and enemy gets a clean SVG drawing', function () {
     });
   });
 });
+test('every drawing is strict XML (no repeated attributes), so it can be shown as an image', function () {
+  var svgs = D.CARDS.map(function (c) { return Art.card(c); });
+  G.STAGES.forEach(function (st) { G.stageEnemies(st, 1).forEach(function (e) { svgs.push(Art.enemy(e)); }); });
+  svgs.forEach(function (svg) {
+    var tags = svg.match(/<[a-zA-Z][^>]*>/g);
+    tags.forEach(function (tag) {
+      var names = (tag.match(/\s([a-zA-Z:-]+)="/g) || []).map(function (a) { return a.trim(); });
+      var seen = {};
+      names.forEach(function (nm) { assert(!seen[nm], 'repeated ' + nm + ' in ' + tag.slice(0, 80)); seen[nm] = true; });
+    });
+    assert(!/#[0-9a-fA-F]{0,5}[g-zG-Z]/.test(svg.replace(/url\(#[^)]*\)/g, '').replace(/id="[^"]*"/g, '')), 'invalid colour value');
+  });
+  assert(/^data:image\/svg\+xml/.test(Art.cardUrl(D.CARDS[0])));
+});
 test('different cards get different drawings, and the same style differs by faction', function () {
   assert.notStrictEqual(Art.card(D.CARD_BY_ID['imp']), Art.card(D.CARD_BY_ID['sylph']));
   assert.notStrictEqual(Art.card(D.CARD_BY_ID['captain']), Art.card(D.CARD_BY_ID['shield-angel']));
