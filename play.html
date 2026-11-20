@@ -20,6 +20,9 @@
   --r-R: #4f9be8;
   --r-SR: #b36bf0;
   --r-SSR: #f0b429;
+  --r-HN: #b9c0d6;
+  --r-HR: #6fd3e8;
+  --r-L: #ff6b8b;
   color-scheme: dark;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -82,6 +85,9 @@ button.btn.big { font-size: 16px; padding: 12px 18px; min-height: 48px; }
   border: 2px solid var(--r-N); aspect-ratio: 3 / 4.2; cursor: pointer; }
 .card.r-R { border-color: var(--r-R); }
 .card.r-SR { border-color: var(--r-SR); }
+.card.r-HN { border-color: var(--r-HN); }
+.card.r-HR { border-color: var(--r-HR); }
+.card.r-L { border-color: var(--r-L); box-shadow: 0 0 12px rgba(255, 107, 139, .6); }
 .card.r-SSR { border-color: var(--r-SSR); box-shadow: 0 0 10px rgba(240, 180, 41, .5); }
 .card .art, .bu-card .art { position: absolute; inset: 0; background: #1a1c28; }
 .card .art svg, .bu-card .art svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
@@ -153,6 +159,9 @@ table.rates td { padding: 2px 12px 2px 0; }
   border: 2px solid var(--r-N); background: #1a1c28; transition: transform .16s ease-out, filter .3s, opacity .4s; }
 .bu-card.r-R { border-color: var(--r-R); }
 .bu-card.r-SR { border-color: var(--r-SR); }
+.bu-card.r-HN { border-color: var(--r-HN); }
+.bu-card.r-HR { border-color: var(--r-HR); }
+.bu-card.r-L { border-color: var(--r-L); box-shadow: 0 0 12px rgba(255, 107, 139, .6); }
 .bu-card.r-SSR { border-color: var(--r-SSR); box-shadow: 0 0 10px rgba(240, 180, 41, .5); }
 .bu-el { position: absolute; top: 2px; left: 3px; font-size: 13px; text-shadow: 0 1px 3px #000; z-index: 2; }
 .bu-lead { position: absolute; top: 2px; right: 3px; font-size: 12px; color: var(--accent); text-shadow: 0 1px 3px #000; z-index: 2; }
@@ -215,6 +224,8 @@ table.rates td { padding: 2px 12px 2px 0; }
 .tr { color: #4a4f66; }
 .treasure .tr { margin-right: 3px; font-size: 15px; }
 .tr.have { color: var(--accent); }
+
+.rar-tag { font-size: 10px; font-weight: 700; color: var(--muted); border: 1px solid var(--panel2); border-radius: 4px; padding: 0 3px; }
 </style>
 </head>
 <body>
@@ -251,135 +262,189 @@ table.rates td { padding: 2px 12px 2px 0; }
  * Edit this file to add cards or change balance. No other file needs to change
  * when you add a card (just add a line to the CARD_LIST below).
  *
+ * The conventions follow the original Rage of Bahamut (2012 English version):
+ *  - three realms: Man, Gods, Demons (here: Mortal, Immortal, Fallen)
+ *  - rarities Normal, High Normal, Rare, High Rare, S Rare, SS Rare, Legend
+ *  - most cards lean to attack or to defense
+ *  - skills read like "Big Boost to Gods Attack" or "Medium Hit to Foes Defense (All)",
+ *    with strength tiers Small, Medium, Big, Great, Massive, Absolute
+ *  - every quest section drops one card of each realm
+ *
  * Art: the game draws placeholder art for every card automatically (js/art.js).
- * To use your own, put an image at  assets/cards/<card-id>.png  and it replaces
- * the placeholder.
+ * To use your own, put an image at  assets/cards/<card-id>.png  and it replaces it.
  */
 var GameData = (function () {
   'use strict';
 
-  // Three factions, like the original's Man / God / Demon. There is no damage weakness
-  // between them. Each leans a different way, and cards matching the alignment you
-  // picked at the start get a small bonus (CONFIG.alignmentBonus). Mortal cards cost 1 less,
-  // which matters because your party's total cost can't go over your ATK PWR.
+  // Three factions. There is no damage weakness between them; each leans a different way,
+  // and cards matching the alignment you picked get a small bonus (CONFIG.alignmentBonus).
+  // Mortal cards cost 1 less, which matters because party cost can't exceed your ATK PWR.
+  // Art rule: Mortal cards are always human, Immortal are gods/angels/fairies/celestial
+  // beasts, Fallen are demons/monsters. Dragons belong to Immortal (celestial, like the
+  // original's Bahamut and Qinglong) and Fallen (chaos dragons, like Tiamat) - never Mortal.
   var FACTIONS = {
     mortal:   { name: 'Mortal',   icon: '⚔', color: '#5fbf7f', atkMod: 1.0,  hpMod: 1.0,  costMod: -1,
-                blurb: 'Balanced fighters. Cost 1 less in your party.' },
-    immortal: { name: 'Immortal', icon: '✦', color: '#f0c75e', atkMod: 0.85, hpMod: 1.25, costMod: 0,
-                blurb: 'The toughest cards. High DEF, lower ATK.' },
-    fallen:   { name: 'Fallen',   icon: '☠', color: '#c05bd6', atkMod: 1.25, hpMod: 0.85, costMod: 0,
-                blurb: 'The hardest hitters. High ATK, lower DEF.' }
+                blurb: 'Humans: knights, archers, mages. Balanced, and each card costs 1 less in your party.' },
+    immortal: { name: 'Immortal', icon: '✦', color: '#f0c75e', atkMod: 0.9,  hpMod: 1.15, costMod: 0,
+                blurb: 'Gods, angels and celestial beasts. Sturdy: higher DEF, lower ATK.' },
+    fallen:   { name: 'Fallen',   icon: '☠', color: '#c05bd6', atkMod: 1.15, hpMod: 0.9,  costMod: 0,
+                blurb: 'Demons, monsters and chaos dragons. Fierce: higher ATK, lower DEF.' }
   };
   var FACTION_ORDER = ['mortal', 'immortal', 'fallen'];
 
   // Cards have ATK and DEF, like the original. In a battle, DEF is how much damage a card
   // can take before it is knocked out, and each hit deals ATK x CONFIG.damagePerAtk.
-  // rate = percent chance per summon. cost = deck cost. fuseExp = exp this card gives when fused.
-  // skill = strength (%) of the card's skill at this rarity.
+  // rate = percent chance per summon. cost = party cost. fuseExp = exp this card gives when fused.
+  // skill = skill strength (%) at this rarity, and tier = how the original named that strength.
   var RARITIES = {
-    N:   { name: 'Normal',     rate: 50, cost: 3,  atk: 100, def: 100, fuseExp: 20,  sell: 20,  skill: 5  },
-    R:   { name: 'Rare',       rate: 33, cost: 5,  atk: 160, def: 150, fuseExp: 45,  sell: 50,  skill: 10 },
-    SR:  { name: 'Super Rare', rate: 13, cost: 8,  atk: 250, def: 230, fuseExp: 100, sell: 120, skill: 15 },
-    SSR: { name: 'Legendary',  rate: 4,  cost: 12, atk: 400, def: 360, fuseExp: 220, sell: 300, skill: 20 }
+    N:   { name: 'Normal',      rate: 40,  cost: 3,  atk: 100, def: 100, fuseExp: 20,  sell: 20,  skill: 5,  tier: 'Small' },
+    HN:  { name: 'High Normal', rate: 25,  cost: 4,  atk: 130, def: 125, fuseExp: 30,  sell: 35,  skill: 6,  tier: 'Small' },
+    R:   { name: 'Rare',        rate: 18,  cost: 5,  atk: 160, def: 150, fuseExp: 45,  sell: 50,  skill: 8,  tier: 'Medium' },
+    HR:  { name: 'High Rare',   rate: 10,  cost: 6,  atk: 200, def: 190, fuseExp: 70,  sell: 80,  skill: 10, tier: 'Big' },
+    SR:  { name: 'S Rare',      rate: 5,   cost: 8,  atk: 250, def: 230, fuseExp: 100, sell: 120, skill: 13, tier: 'Great' },
+    SSR: { name: 'SS Rare',     rate: 1.7, cost: 12, atk: 400, def: 360, fuseExp: 220, sell: 300, skill: 16, tier: 'Massive' },
+    L:   { name: 'Legend',      rate: 0.3, cost: 15, atk: 520, def: 480, fuseExp: 300, sell: 500, skill: 20, tier: 'Absolute' }
+  };
+  var RARITY_ORDER = ['N', 'HN', 'R', 'HR', 'SR', 'SSR', 'L'];
+
+  // Card types: like the original, most cards are built to attack or to defend.
+  var CARD_TYPES = {
+    atk: { name: 'Attack',   atk: 1.15, def: 0.85 },
+    def: { name: 'Defense',  atk: 0.85, def: 1.15 },
+    bal: { name: 'Balanced', atk: 1.0,  def: 1.0 }
   };
 
-  // Card skills. Each has a chance to trigger at the start of a battle (see
-  // CONFIG.skillChanceBySlot) and then lasts the whole battle.
-  //   atkUp     +X% ATK to allies           defUp     +X% DEF to allies
-  //   atkDefUp  +X% ATK and DEF to allies   foeAtkDown / foeDefDown  -X% to every enemy
-  // A skill aimed at one faction ("fallen") only helps allies of that faction, but is
-  // CONFIG.factionSkillMult times stronger. That rewards building around your alignment.
-  var SKILL_TYPES = {
-    atkUp:      { label: 'ATK Up' },
-    defUp:      { label: 'DEF Up' },
-    atkDefUp:   { label: 'ATK & DEF Up' },
-    foeAtkDown: { label: 'Enemy ATK Down' },
-    foeDefDown: { label: 'Enemy DEF Down' }
-  };
-  var RARITY_ORDER = ['N', 'R', 'SR', 'SSR'];
+  // Skills. kind: 'boost' raises your cards, 'hit' lowers the enemy's.
+  // stat: 'atk', 'def' or 'both'. target: 'all', or a faction ('mortal', 'immortal', 'fallen').
+  // A boost aimed at one faction only helps your cards of that faction; a hit aimed at one
+  // faction only weakens enemies of that faction. Aimed skills are CONFIG.factionSkillMult
+  // times stronger, which rewards building around your alignment, as in the original.
+  // Each skill can trigger at the start of a battle (see CONFIG.skillChanceBySlot).
+  var SKILL_KINDS = { boost: 'Boost', hit: 'Hit' };
 
-  // [id, name, faction, rarity, art style, art look, skill name, skill type, skill target]
-  // Art styles: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
-  // Art looks (color scene only, no effect on play): fire, water, wind, light, dark
-  // Skill target: 'all' (every ally) or a faction ('mortal', 'immortal', 'fallen').
-  // Enemy-lowering skills always hit every enemy, so their target is 'all'.
+  // [id, name, faction, rarity, type, art style, art look, skill name, skill kind, skill stat, skill target]
+  // Art styles. Human: archer, knight, mage, warrior, lancer. Immortal adds a halo and wings
+  // to those, plus sprite (fairy), beast, seraph and serpent (celestial dragon). Fallen adds
+  // horns to those, plus sprite (imp), beast, tyrant and dragon (chaos dragon).
+  // Art looks (color scene only): fire, water, wind, light, dark.
   var CARD_LIST = [
-    ['dawn-acolyte',      'Dawn Acolyte',      'mortal',   'N',   'sprite', 'light', 'Morning Prayer', 'defUp', 'all'],
-    ['breeze-pixie',      'Breeze Pixie',      'mortal',   'N',   'sprite', 'wind', 'Tailwind', 'atkUp', 'mortal'],
-    ['cinder-archer',     'Cinder Archer',     'mortal',   'R',   'archer', 'fire', 'Piercing Volley', 'foeDefDown', 'all'],
-    ['reed-skirmisher',   'Reed Skirmisher',   'mortal',   'R',   'archer', 'wind', 'Ambush', 'atkUp', 'all'],
-    ['sunblade-paladin',  'Sunblade Paladin',  'mortal',   'R',   'knight', 'light', 'Shield Wall', 'defUp', 'mortal'],
-    ['storm-falconer',    'Storm Falconer',    'mortal',   'R',   'beast',  'wind', 'Harry', 'foeAtkDown', 'all'],
-    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'knight', 'fire', 'Warden\'s Oath', 'atkDefUp', 'mortal'],
-    ['tempest-leviathan', 'Tempest Leviathan', 'mortal',   'SSR', 'dragon', 'water', 'Maelstrom', 'foeDefDown', 'all'],
+    // ---- Mortal: humans only
+    ['militia-spearman',  'Militia Spearman',  'mortal',   'N',   'def', 'lancer',  'wind',  'Hold the Line',      'boost', 'def',  'all'],
+    ['village-archer',    'Village Archer',    'mortal',   'N',   'atk', 'archer',  'wind',  'Volley',             'hit',   'def',  'all'],
+    ['mercenary',         'Mercenary',         'mortal',   'HN',  'atk', 'warrior', 'fire',  'Paid in Blood',      'boost', 'atk',  'mortal'],
+    ['hedge-witch',       'Hedge Witch',       'mortal',   'HN',  'bal', 'mage',    'wind',  'Hex',                'hit',   'atk',  'all'],
+    ['captain',           'Captain',           'mortal',   'R',   'def', 'knight',  'light', 'Rally',              'boost', 'def',  'mortal'],
+    ['master-archer',     'Master Archer',     'mortal',   'R',   'atk', 'archer',  'fire',  'Piercing Shot',      'hit',   'def',  'all'],
+    ['alchemist',         'Alchemist',         'mortal',   'R',   'bal', 'mage',    'water', 'Elixir',             'boost', 'both', 'all'],
+    ['berserker',         'Berserker',         'mortal',   'HR',  'atk', 'warrior', 'fire',  'Frenzy',             'boost', 'atk',  'mortal'],
+    ['high-lancer',       'High Lancer',       'mortal',   'HR',  'def', 'lancer',  'light', 'Phalanx',            'boost', 'def',  'all'],
+    ['greatsword-maiden', 'Greatsword Maiden', 'mortal',   'HR',  'atk', 'knight',  'water', 'Demon\'s Bane',      'hit',   'def',  'fallen'],
+    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'bal', 'knight',  'fire',  'Warden\'s Oath',     'boost', 'both', 'mortal'],
+    ['grand-sorcerer',    'Grand Sorcerer',    'mortal',   'SR',  'atk', 'mage',    'light', 'Arcane Storm',       'hit',   'def',  'all'],
+    ['achilles',          'Achilles',          'mortal',   'SSR', 'atk', 'lancer',  'fire',  'Wrath of Achilles',  'boost', 'atk',  'mortal'],
+    ['siegfried',         'Siegfried',         'mortal',   'L',   'bal', 'warrior', 'light', 'Dragonslayer',       'boost', 'both', 'all'],
 
-    ['brook-sprite',      'Brook Sprite',      'immortal', 'N',   'sprite', 'water', 'Spring Blessing', 'defUp', 'all'],
-    ['lantern-cleric',    'Lantern Cleric',    'immortal', 'R',   'mage',   'light', 'Guiding Light', 'defUp', 'immortal'],
-    ['tide-caller',       'Tide Caller',       'immortal', 'R',   'mage',   'water', 'Undertow', 'foeAtkDown', 'all'],
-    ['frost-sentinel',    'Frost Sentinel',    'immortal', 'R',   'beast',  'water', 'Frostbite', 'foeDefDown', 'all'],
-    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'seraph', 'light', 'Sanctuary', 'atkDefUp', 'immortal'],
-    ['cyclone-dancer',    'Cyclone Dancer',    'immortal', 'SR',  'mage',   'wind', 'Gale Dance', 'atkUp', 'all'],
-    ['radiant-archon',    'Radiant Archon',    'immortal', 'SSR', 'seraph', 'light', 'Divine Decree', 'atkDefUp', 'immortal'],
-    ['skyfather-zephyr',  'Skyfather Zephyr',  'immortal', 'SSR', 'seraph', 'wind', 'Heaven\'s Wrath', 'atkUp', 'all'],
+    // ---- Immortal: gods, angels, fairies, celestial beasts and dragons
+    ['sylph',             'Sylph',             'immortal', 'N',   'atk', 'sprite',  'wind',  'Gust',               'boost', 'atk',  'immortal'],
+    ['dryad',             'Dryad',             'immortal', 'N',   'def', 'mage',    'wind',  'Bark Skin',          'boost', 'def',  'all'],
+    ['nymph',             'Nymph',             'immortal', 'HN',  'def', 'sprite',  'water', 'Spring Blessing',    'boost', 'def',  'immortal'],
+    ['shield-angel',      'Shield Angel',      'immortal', 'HN',  'def', 'knight',  'light', 'Aegis',              'boost', 'def',  'all'],
+    ['agni',              'Agni',              'immortal', 'R',   'atk', 'mage',    'fire',  'Sacred Flame',       'boost', 'atk',  'immortal'],
+    ['rhea',              'Rhea',              'immortal', 'R',   'def', 'mage',    'light', 'Mother\'s Ward',     'boost', 'def',  'immortal'],
+    ['valkyrie-lancer',   'Valkyrie Lancer',   'immortal', 'R',   'atk', 'lancer',  'light', 'Valiant Charge',     'hit',   'def',  'all'],
+    ['pegasus',           'Pegasus',           'immortal', 'HR',  'bal', 'beast',   'light', 'Skyward',            'boost', 'both', 'immortal'],
+    ['freyja',            'Freyja',            'immortal', 'HR',  'def', 'mage',    'water', 'Falcon Cloak',       'hit',   'atk',  'all'],
+    ['hermes',            'Hermes',            'immortal', 'HR',  'atk', 'archer',  'wind',  'Trickster',          'hit',   'atk',  'fallen'],
+    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'bal', 'seraph',  'light', 'Sanctuary',          'boost', 'both', 'immortal'],
+    ['xuanwu',            'Xuanwu',            'immortal', 'SR',  'def', 'beast',   'water', 'Black Tortoise Shell', 'boost', 'def', 'all'],
+    ['qinglong',          'Qinglong',          'immortal', 'SSR', 'atk', 'serpent', 'water', 'Azure Tempest',      'boost', 'atk',  'immortal'],
+    ['odin',              'Odin',              'immortal', 'L',   'bal', 'lancer',  'light', 'Gungnir',            'boost', 'both', 'all'],
 
-    ['ember-imp',         'Ember Imp',         'fallen',   'N',   'sprite', 'fire', 'Kindle', 'atkUp', 'fallen'],
-    ['shade-whelp',       'Shade Whelp',       'fallen',   'N',   'sprite', 'dark', 'Gloom', 'foeAtkDown', 'all'],
-    ['ashen-duelist',     'Ashen Duelist',     'fallen',   'R',   'knight', 'fire', 'Cinder Edge', 'atkUp', 'fallen'],
-    ['gloom-thief',       'Gloom Thief',       'fallen',   'R',   'archer', 'dark', 'Sap', 'foeDefDown', 'all'],
-    ['hollow-reaver',     'Hollow Reaver',     'fallen',   'R',   'knight', 'dark', 'Dread', 'foeAtkDown', 'all'],
-    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'mage',   'dark', 'Shadow Hex', 'atkDefUp', 'fallen'],
-    ['abyss-knight',      'Abyss Knight',      'fallen',   'SR',  'tyrant', 'water', 'Abyssal Guard', 'defUp', 'all'],
-    ['pyre-sovereign',    'Pyre Sovereign',    'fallen',   'SSR', 'dragon', 'fire', 'Hellfire', 'atkUp', 'fallen'],
-    ['void-tyrant',       'Void Tyrant',       'fallen',   'SSR', 'tyrant', 'dark', 'Oblivion', 'foeDefDown', 'all']
+    // ---- Fallen: demons, monsters, undead and chaos dragons
+    ['goblin',            'Goblin',            'fallen',   'N',   'atk', 'sprite',  'dark',  'Ambush',             'boost', 'atk',  'fallen'],
+    ['imp',               'Imp',               'fallen',   'N',   'bal', 'sprite',  'fire',  'Prank',              'hit',   'atk',  'all'],
+    ['ghoul-brute',       'Ghoul Brute',       'fallen',   'HN',  'atk', 'warrior', 'dark',  'Grave Hunger',       'hit',   'def',  'all'],
+    ['hellhound',         'Hellhound',         'fallen',   'HN',  'atk', 'beast',   'fire',  'Hunt',               'boost', 'atk',  'fallen'],
+    ['succubus',          'Succubus',          'fallen',   'R',   'def', 'mage',    'dark',  'Charm',              'hit',   'atk',  'all'],
+    ['gargoyle',          'Gargoyle',          'fallen',   'R',   'def', 'sprite',  'dark',  'Stoneskin',          'boost', 'def',  'fallen'],
+    ['wraith-knight',     'Wraith Knight',     'fallen',   'R',   'def', 'knight',  'dark',  'Dread',              'hit',   'atk',  'mortal'],
+    ['chimera',           'Chimera',           'fallen',   'HR',  'atk', 'beast',   'fire',  'Triple Maw',         'hit',   'def',  'all'],
+    ['vampire-countess',  'Vampire Countess',  'fallen',   'HR',  'def', 'mage',    'dark',  'Blood Pact',         'boost', 'def',  'fallen'],
+    ['minotaur',          'Minotaur',          'fallen',   'HR',  'atk', 'warrior', 'fire',  'Labyrinth Rage',     'boost', 'atk',  'all'],
+    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'bal', 'mage',    'dark',  'Shadow Hex',         'boost', 'both', 'fallen'],
+    ['medusa',            'Medusa',            'fallen',   'SR',  'atk', 'mage',    'water', 'Stone Gaze',         'hit',   'def',  'all'],
+    ['tiamat',            'Tiamat',            'fallen',   'SSR', 'atk', 'dragon',  'fire',  'Primordial Chaos',   'boost', 'atk',  'fallen'],
+    ['asmodeus',          'Asmodeus',          'fallen',   'L',   'bal', 'tyrant',  'dark',  'Infernal Crown',     'boost', 'both', 'all']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
     var r = RARITIES[c[3]];
     var f = FACTIONS[c[2]];
+    var t = CARD_TYPES[c[4]];
     return {
       id: c[0],
       name: c[1],
       faction: c[2],
       rarity: c[3],
-      style: c[4],
-      look: c[5],
-      skill: { name: c[6], type: c[7], target: c[8] },
-      atk: Math.round(r.atk * f.atkMod),
-      hp: Math.round(r.def * f.hpMod),   // "hp" in the code is the DEF shown on screen
+      type: c[4],
+      style: c[5],
+      look: c[6],
+      skill: { name: c[7], kind: c[8], stat: c[9], target: c[10] },
+      atk: Math.round(r.atk * f.atkMod * t.atk),
+      hp: Math.round(r.def * f.hpMod * t.def),   // "hp" in the code is the DEF shown on screen
       cost: r.cost + f.costMod
     };
   });
   var CARD_BY_ID = {};
   CARDS.forEach(function (c) { CARD_BY_ID[c.id] = c; });
 
+  // Cards from earlier versions of this game, and what they became. Saves are converted.
+  var CARD_RENAMES = {
+    'dawn-acolyte': 'village-archer', 'breeze-pixie': 'militia-spearman', 'cinder-archer': 'master-archer',
+    'reed-skirmisher': 'captain', 'sunblade-paladin': 'alchemist', 'storm-falconer': 'mercenary',
+    'tempest-leviathan': 'achilles', 'brook-sprite': 'sylph', 'lantern-cleric': 'rhea', 'tide-caller': 'agni',
+    'frost-sentinel': 'valkyrie-lancer', 'cyclone-dancer': 'xuanwu', 'radiant-archon': 'qinglong',
+    'skyfather-zephyr': 'qinglong', 'ember-imp': 'imp', 'shade-whelp': 'goblin', 'ashen-duelist': 'wraith-knight',
+    'gloom-thief': 'succubus', 'hollow-reaver': 'gargoyle', 'abyss-knight': 'medusa', 'pyre-sovereign': 'tiamat',
+    'void-tyrant': 'tiamat'
+  };
+
   // Quests. Each chapter has 5 sections. Sections 1-4: beat 3 monsters, then a treasure
   // chest opens. Section 5 is the chapter boss. Every enemy in a chapter is of that
   // chapter's faction (which changes their ATK/DEF the same way it does for cards).
+  // drops: as in the original, each section drops one card of each realm:
+  //   [Mortal card, Immortal card, Fallen card]. Defeated monsters sometimes drop one of them,
+  //   and the chest usually holds one. bossDrops: what the boss's chest can hold.
   // treasure: a 6-piece set. Sections 1-4 each drop "their" piece (pieces 1-4); the boss
   // drops pieces 5 and 6. Collect all 6 to claim a card of the set's reward rarity.
-  // dropWeights = chance weights for the card dropped from chests and boss battles.
   var CHAPTERS = [
     { id: 1, name: 'The Verdant Frontier', faction: 'mortal', look: 'wind',
-      enemies: [{ name: 'Thornback Boar', style: 'beast' }, { name: 'Moss Brigand', style: 'archer' },
-                { name: 'Wild Gale Hawk', style: 'beast' }, { name: 'Bramble Witch', style: 'mage' }],
-      boss: { name: 'Elder Treant', style: 'tyrant' },
+      enemies: [{ name: 'Road Bandit', style: 'warrior' }, { name: 'Brigand Archer', style: 'archer' },
+                { name: 'Renegade Knight', style: 'knight' }, { name: 'Bramble Witch', style: 'mage' }],
+      boss: { name: 'Bandit King', style: 'warrior' },
+      drops: [['village-archer', 'sylph', 'goblin'], ['militia-spearman', 'dryad', 'imp'],
+              ['mercenary', 'nymph', 'hellhound'], ['hedge-witch', 'shield-angel', 'ghoul-brute']],
+      bossDrops: ['captain', 'rhea', 'gargoyle'],
       treasure: { name: 'Relics of the Frontier', reward: 'SR',
-        pieces: ['Mossy Idol', 'Boar Tusk Charm', 'Hawk Feather Quill', 'Bramble Crown', 'Treant Heartwood', 'Verdant Seal'] },
-      dropWeights: { N: 70, R: 27, SR: 3, SSR: 0 } },
+        pieces: ['Mossy Idol', 'Bandit\'s Coin', 'Fletcher\'s Quill', 'Bramble Crown', 'Kingly Signet', 'Verdant Seal'] } },
     { id: 2, name: 'Cinder Peaks', faction: 'fallen', look: 'fire',
-      enemies: [{ name: 'Magma Crawler', style: 'beast' }, { name: 'Ash Raider', style: 'knight' },
-                { name: 'Smoldering Wisp', style: 'sprite' }, { name: 'Slag Golem', style: 'tyrant' }],
-      boss: { name: 'Caldera Drake', style: 'dragon' },
+      enemies: [{ name: 'Cave Goblin', style: 'sprite' }, { name: 'Lava Hound', style: 'beast' },
+                { name: 'Ash Ghoul', style: 'warrior' }, { name: 'Cinder Witch', style: 'mage' }],
+      boss: { name: 'Fafnir', style: 'dragon' },
+      drops: [['mercenary', 'nymph', 'ghoul-brute'], ['master-archer', 'agni', 'succubus'],
+              ['alchemist', 'valkyrie-lancer', 'wraith-knight'], ['captain', 'rhea', 'gargoyle']],
+      bossDrops: ['berserker', 'pegasus', 'chimera'],
       treasure: { name: 'Embers of the Peaks', reward: 'SR',
-        pieces: ['Magma Shard', 'Raider\'s Brand', 'Wisp Lantern', 'Golem Core', 'Drake Scale', 'Caldera Seal'] },
-      dropWeights: { N: 40, R: 45, SR: 14, SSR: 1 } },
-    { id: 3, name: 'The Hollow Sanctum', faction: 'immortal', look: 'dark',
-      enemies: [{ name: 'Grave Warden', style: 'knight' }, { name: 'Dusk Stalker', style: 'beast' },
-                { name: 'Hollow Priest', style: 'mage' }, { name: 'Wailing Shade', style: 'sprite' }],
-      boss: { name: 'The Pale Regent', style: 'seraph' },
+        pieces: ['Goblin Totem', 'Hound Collar', 'Ghoul\'s Lantern', 'Witch\'s Cauldron', 'Fafnir\'s Scale', 'Caldera Seal'] } },
+    { id: 3, name: 'The Sky Sanctum', faction: 'immortal', look: 'light',
+      enemies: [{ name: 'Temple Sylph', style: 'sprite' }, { name: 'Sanctum Guardian', style: 'knight' },
+                { name: 'Sacred Lion', style: 'beast' }, { name: 'Oracle', style: 'mage' }],
+      boss: { name: 'Seraph of Judgment', style: 'seraph' },
+      drops: [['master-archer', 'agni', 'succubus'], ['high-lancer', 'freyja', 'vampire-countess'],
+              ['greatsword-maiden', 'hermes', 'minotaur'], ['berserker', 'pegasus', 'chimera']],
+      bossDrops: ['grand-sorcerer', 'xuanwu', 'medusa'],
       treasure: { name: 'Regalia of the Sanctum', reward: 'SSR',
-        pieces: ['Grave Key', 'Stalker\'s Fang', 'Priest\'s Censer', 'Wailing Bell', 'Regent\'s Ring', 'Hollow Seal'] },
-      dropWeights: { N: 20, R: 45, SR: 30, SSR: 5 } }
+        pieces: ['Cloud Key', 'Guardian\'s Plume', 'Lion\'s Mane', 'Oracle\'s Eye', 'Judgment Scale', 'Sanctum Seal'] } }
   ];
   var STAGES_PER_CHAPTER = 5;
 
@@ -389,6 +454,7 @@ var GameData = (function () {
     startGold: 500,
     singlePullCost: 30,
     tenPullCost: 270,
+    tenPullGuarantee: 'HR',          // every x10 summon includes at least one card of this rarity or better
     staminaRegenMs: 60 * 1000,       // 1 stamina per minute
     maxDeckSize: 5,
     maxEvo: 2,
@@ -400,12 +466,12 @@ var GameData = (function () {
     damagePerAtk: 0.2,               // each hit deals ATK x 0.2 (+/-10%) to the target's DEF
     expPerStamina: 1,                // quests give exp equal to the stamina spent, like the original
     skillChanceBySlot: [1, 0.8, 0.6, 0.4, 0.2], // chance each party slot's skill triggers
-    factionSkillMult: 1.5,           // faction-only skills are 1.5x stronger
+    factionSkillMult: 1.5,           // skills aimed at one faction are 1.5x stronger
     treasureDropChance: 0.2,         // chance a section's monster drops that section's treasure piece
     bossTreasureChance: 0.5,         // chance a boss drops treasure piece 5 or 6
     monstersPerSection: 3,           // monsters to beat before the chest opens
-    monsterDropChance: 0.2,          // chance a defeated monster drops a card
-    chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
+    monsterDropChance: 0.2,          // chance a defeated monster drops one of the section's cards
+    chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold), as in the original
     leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and DEF
     alignmentBonus: 1.05,            // cards matching your alignment: +5% ATK and DEF
     sameFactionFuseMult: 1.5,        // fusing a card of the same faction gives 1.5x exp
@@ -423,7 +489,8 @@ var GameData = (function () {
   };
 
   var api = {
-    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER, SKILL_TYPES: SKILL_TYPES,
+    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER,
+    CARD_TYPES: CARD_TYPES, SKILL_KINDS: SKILL_KINDS, CARD_RENAMES: CARD_RENAMES,
     CARDS: CARDS, CARD_BY_ID: CARD_BY_ID, CHAPTERS: CHAPTERS,
     STAGES_PER_CHAPTER: STAGES_PER_CHAPTER, CONFIG: CONFIG
   };
@@ -584,21 +651,59 @@ var Art = (function () {
     return shape(P, 'M' + x + ',' + (y - 34) + ' L' + (x + 10) + ',' + (y - 14) + ' L' + x + ',' + y + ' L' + (x - 10) + ',' + (y - 14) + 'Z', P.c);
   }
 
+  // ---------- faction overlays ----------
+  // Immortal (gods): halo, and feathered wings on armored figures.
+  // Fallen (demons): horns, and bat wings on robed or armored figures.
+  // Mortal (humans): nothing extra.
+  function featherWing(P) {
+    return shape(P, 'M-26,-172 C-96,-250 -150,-210 -138,-120 C-120,-150 -92,-146 -70,-128 C-62,-112 -44,-118 -26,-138Z', P.c) +
+      '<path d="M-60,-190 L-112,-156 M-70,-170 L-124,-136 M-80,-150 L-128,-126" stroke="' + P.b + '" stroke-width="2" opacity=".6"/>';
+  }
+  function batWing(P) {
+    return shape(P, 'M-26,-170 L-120,-236 L-108,-190 L-150,-196 L-122,-150 L-150,-130 L-96,-128 L-60,-112 L-30,-134Z', P.b) +
+      '<path d="M-26,-170 L-108,-190 M-26,-170 L-122,-150 M-26,-170 L-96,-128" stroke="' + P.a + '" stroke-width="1.5" opacity=".7"/>';
+  }
+  function backOverlay(P, fx, wings) {
+    if (!wings) { return ''; }
+    if (fx === 'immortal') { var w = featherWing(P); return w + mirror(w); }
+    if (fx === 'fallen') { var b = batWing(P); return b + mirror(b); }
+    return '';
+  }
+  // Halo or horns for a head centred at (0, y) with radius r.
+  function headOverlay(P, fx, y, r) {
+    if (fx === 'immortal') {
+      return '<ellipse cx="0" cy="' + (y - r - 12) + '" rx="' + (r + 4) + '" ry="7" fill="none" stroke="' + P.c + '" stroke-width="5"/>' +
+        '<ellipse cx="0" cy="' + (y - r - 12) + '" rx="' + (r + 4) + '" ry="7" fill="none" stroke="#fff" stroke-width="1.5" opacity=".8"/>';
+    }
+    if (fx === 'fallen') {
+      var t = y - r + 6;
+      return shape(P, 'M-' + (r - 6) + ',' + t + ' C-' + (r + 10) + ',' + (t - 10) + ' -' + (r + 14) + ',' + (t - 30) + ' -' + (r + 4) + ',' + (t - 44) +
+          ' C-' + (r + 2) + ',' + (t - 26) + ' -' + (r - 6) + ',' + (t - 16) + ' -' + (r - 14) + ',' + (t - 6) + 'Z', P.a) +
+        shape(P, 'M' + (r - 6) + ',' + t + ' C' + (r + 10) + ',' + (t - 10) + ' ' + (r + 14) + ',' + (t - 30) + ' ' + (r + 4) + ',' + (t - 44) +
+          ' C' + (r + 2) + ',' + (t - 26) + ' ' + (r - 6) + ',' + (t - 16) + ' ' + (r - 14) + ',' + (t - 6) + 'Z', P.a);
+    }
+    return '';
+  }
+
   // ---------- figures ----------
-  function sprite(P, R, el) {
+  function sprite(P, R, el, fx) {
+    var fairy = fx === 'immortal';
     var s = shadow(38);
-    s += limb(P, 'M14,-34 C46,-30 58,-72 38,-88', 6);
-    s += shape(P, 'M-14,-84 C-62,-132 -96,-96 -62,-68 C-74,-60 -44,-56 -16,-62Z', P.b);
-    s += shape(P, 'M14,-84 C62,-132 96,-96 62,-68 C74,-60 44,-56 16,-62Z', P.b);
+    if (!fairy) { s += limb(P, 'M14,-34 C46,-30 58,-72 38,-88', 6); }
+    var wingFill = fairy ? P.c : P.b;
+    s += '<g opacity="' + (fairy ? '.8' : '1') + '">' +
+      shape(P, 'M-14,-84 C-62,-132 -96,-96 -62,-68 C-74,-60 -44,-56 -16,-62Z', wingFill) +
+      shape(P, 'M14,-84 C62,-132 96,-96 62,-68 C74,-60 44,-56 16,-62Z', wingFill) + '</g>';
     s += limb(P, 'M-12,-14 L-14,-2', 10) + limb(P, 'M12,-14 L14,-2', 10);
     s += '<ellipse cx="0" cy="-48" rx="30" ry="38" fill="' + P.d + '" stroke="' + P.a + '" stroke-width="2.5"/>';
     s += '<ellipse cx="0" cy="-42" rx="17" ry="24" fill="' + P.b + '" opacity=".75"/>';
     s += limb(P, 'M-26,-56 L-42,-40', 9) + limb(P, 'M26,-56 L42,-40', 9);
     s += '<circle cx="0" cy="-104" r="34" fill="' + P.d + '" stroke="' + P.a + '" stroke-width="2.5"/>';
-    s += shape(P, 'M-26,-124 L-34,-156 L-12,-132Z', P.a) + shape(P, 'M26,-124 L34,-156 L12,-132Z', P.a);
+    if (fairy) { s += headOverlay(P, 'immortal', -104, 34); }
+    else { s += shape(P, 'M-26,-124 L-34,-156 L-12,-132Z', P.a) + shape(P, 'M26,-124 L34,-156 L12,-132Z', P.a); }
     s += eye(P, -13, -106, 6) + eye(P, 13, -106, 6);
     s += '<path d="M-9,-86 Q0,-79 9,-86" stroke="' + P.c + '" stroke-width="3" fill="none" stroke-linecap="round"/>';
-    s += accent(P, el, 0, -150);
+    if (!fx) { s += accent(P, el, 0, -150); }
     return s;
   }
 
@@ -627,7 +732,7 @@ var Art = (function () {
       eye(P, -9, y + 2, 4.5) + eye(P, 9, y + 2, 4.5);
   }
 
-  function archer(P, R, el) {
+  function archer(P, R, el, fx) {
     var s = shadow(46);
     s += shape(P, 'M30,-190 L46,-198 L56,-148 L40,-142Z', P.b);
     s += '<path d="M40,-198 L36,-214 M46,-196 L46,-214 M52,-194 L56,-212" stroke="' + P.c + '" stroke-width="2.5"/>';
@@ -639,12 +744,13 @@ var Art = (function () {
     s += '<path d="M-90,-224 C-144,-176 -144,-108 -90,-60" fill="none" stroke="' + P.c + '" stroke-width="6" stroke-linecap="round"/>';
     s += '<path d="M-90,-224 L-40,-144 L-90,-60" fill="none" stroke="#fff" stroke-width="1.5" opacity=".7"/>';
     s += '<path d="M-96,-143 L-30,-143" stroke="' + P.a + '" stroke-width="3"/>' + shape(P, 'M-100,-143 L-86,-150 L-86,-136Z', P.c);
-    s += accent(P, el, 0, -242);
+    s += fx ? headOverlay(P, fx, -206, 23) : '';
     return s;
   }
 
-  function knight(P, R, el) {
+  function knight(P, R, el, fx) {
     var s = shadow(50);
+    s += backOverlay(P, fx, true);
     s += human(P, { cape: P.b });
     s += '<ellipse cx="-46" cy="-172" rx="19" ry="13" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
     s += '<ellipse cx="46" cy="-172" rx="19" ry="13" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
@@ -658,12 +764,13 @@ var Art = (function () {
     s += '<path d="M52,-126 H84" stroke="' + P.a + '" stroke-width="7" stroke-linecap="round"/>';
     s += shape(P, 'M-94,-152 L-50,-152 L-50,-112 C-50,-86 -72,-72 -72,-72 C-72,-72 -94,-86 -94,-112Z', P.b);
     s += shape(P, 'M-72,-136 L-62,-116 L-72,-96 L-82,-116Z', P.c);
-    s += accent(P, el, 0, -244);
+    s += fx ? headOverlay(P, fx, -206, 26) : '';
     return s;
   }
 
-  function mage(P, R, el) {
+  function mage(P, R, el, fx) {
     var s = shadow(58);
+    s += backOverlay(P, fx === 'fallen' ? fx : null, true);
     s += human(P, { robe: true });
     s += limb(P, 'M36,-168 L60,-152 L68,-146', 14);
     s += limb(P, 'M-36,-168 L-60,-192 L-66,-212', 14);
@@ -675,7 +782,12 @@ var Art = (function () {
     s += shape(P, 'M-36,-226 L0,-296 L36,-226 Q0,-214 -36,-226Z', P.b);
     s += '<ellipse cx="0" cy="-224" rx="42" ry="9" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
     s += '<circle cx="0" cy="-246" r="5" fill="' + P.c + '"/>';
-    s += accent(P, el, 0, -298);
+    if (fx === 'immortal') {
+      s += '<ellipse cx="0" cy="-306" rx="26" ry="7" fill="none" stroke="' + P.c + '" stroke-width="5"/>';
+    } else if (fx === 'fallen') {
+      s += shape(P, 'M-30,-232 C-50,-246 -56,-268 -46,-284 C-44,-266 -36,-254 -24,-238Z', P.a) +
+        shape(P, 'M30,-232 C50,-246 56,-268 46,-284 C44,-266 36,-254 24,-238Z', P.a);
+    }
     return s;
   }
 
@@ -711,8 +823,13 @@ var Art = (function () {
     return s;
   }
 
-  function beast(P, R, el) {
+  function beast(P, R, el, fx) {
     var s = shadow(76);
+    if (fx === 'immortal') {
+      // Feathered wings for celestial beasts (Pegasus and friends).
+      s += '<g transform="translate(-6 -90) rotate(-10)">' + shape(P, 'M0,0 C-30,-90 -110,-110 -120,-60 C-90,-70 -60,-50 -40,-20Z', P.c) +
+        '<path d="M-20,-30 L-90,-74 M-30,-14 L-104,-54" stroke="' + P.b + '" stroke-width="2" opacity=".6"/></g>';
+    }
     s += limb(P, 'M-62,-84 C-106,-112 -120,-60 -96,-34', 10);
     s += limb(P, 'M-42,-52 L-46,-6', 16) + limb(P, 'M-18,-52 L-16,-6', 16);
     s += '<ellipse cx="0" cy="-74" rx="68" ry="36" fill="' + P.d + '" stroke="' + P.a + '" stroke-width="2.5"/>';
@@ -728,7 +845,14 @@ var Art = (function () {
     s += '<circle cx="143" cy="-106" r="4" fill="' + P.c + '"/>';
     s += shape(P, 'M120,-94 L125,-80 L130,-95Z', P.c);
     s += eye(P, 96, -120, 4.5);
-    s += accent(P, el, 96, -150);
+    if (fx === 'immortal') {
+      s += '<ellipse cx="88" cy="-158" rx="24" ry="6" fill="none" stroke="' + P.c + '" stroke-width="4"/>';
+    } else if (fx === 'fallen') {
+      s += shape(P, 'M76,-134 C64,-152 66,-170 80,-180 C76,-164 80,-152 88,-140Z', P.a) +
+        shape(P, 'M98,-134 C102,-154 112,-166 128,-170 C118,-158 112,-148 106,-134Z', P.a);
+    } else {
+      s += accent(P, el, 96, -150);
+    }
     return s;
   }
 
@@ -751,16 +875,70 @@ var Art = (function () {
     return s;
   }
 
-  var FIGURES = { sprite: sprite, archer: archer, knight: knight, mage: mage, seraph: seraph, tyrant: tyrant, beast: beast, dragon: dragon };
-  var STYLE_SCALE = { sprite: 1.35, archer: 1.0, knight: 1.0, mage: 0.9, seraph: 0.76, tyrant: 0.86, beast: 1.0, dragon: 0.72 };
-  var STYLE_DX = { beast: -12, dragon: 8 };
-  var RARITY_SCALE = { N: 0.92, R: 1, SR: 1.05, SSR: 1.1 };
+  // Axe-wielding fighter (berserker, mercenary, ghoul brute, Siegfried).
+  function warrior(P, R, el, fx) {
+    var s = shadow(56);
+    s += human(P, { wide: true });
+    s += '<path d="M-36,-40 L74,-262" stroke="' + P.a + '" stroke-width="7" stroke-linecap="round"/>';
+    s += shape(P, 'M62,-270 C100,-272 112,-232 100,-206 C88,-222 74,-230 52,-234Z', P.c);
+    s += shape(P, 'M60,-240 C40,-262 30,-280 40,-296 C52,-280 62,-266 70,-256Z', P.c);
+    s += limb(P, 'M-46,-168 L-30,-130 L6,-112', 17) + limb(P, 'M46,-168 L58,-140 L40,-150', 17);
+    s += head(P, 24, -208);
+    s += shape(P, 'M-25,-214 C-22,-242 22,-242 25,-214 C12,-226 -12,-226 -25,-214Z', P.b);
+    s += '<path d="M-24,-218 H24" stroke="' + P.c + '" stroke-width="3"/>';
+    s += fx ? headOverlay(P, fx, -208, 24) : '';
+    return s;
+  }
+
+  // Spear fighter (militia, high lancer, Achilles, Valkyrie, Odin).
+  function lancer(P, R, el, fx) {
+    var s = shadow(48);
+    s += backOverlay(P, fx, true);
+    s += human(P, { cape: P.b });
+    s += '<path d="M58,0 L58,-300" stroke="' + P.a + '" stroke-width="6" stroke-linecap="round"/>';
+    s += shape(P, 'M50,-298 L58,-336 L66,-298 L58,-290Z', P.c);
+    s += '<path d="M48,-292 H68" stroke="' + P.c + '" stroke-width="4" stroke-linecap="round"/>';
+    s += limb(P, 'M40,-166 L58,-140 L58,-118', 15) + limb(P, 'M-40,-166 L-54,-128 L-40,-106', 15);
+    s += '<ellipse cx="-62" cy="-118" rx="26" ry="32" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
+    s += '<circle cx="-62" cy="-118" r="8" fill="' + P.c + '"/>';
+    s += head(P, 23, -206);
+    s += shape(P, 'M-26,-208 C-26,-246 26,-246 26,-208 L20,-200 L-20,-200Z', P.b);
+    s += '<path d="M0,-238 L0,-196" stroke="' + P.c + '" stroke-width="3"/>';
+    s += fx ? headOverlay(P, fx, -206, 26) : shape(P, 'M-2,-240 C-20,-270 10,-280 14,-252Z', P.a);
+    return s;
+  }
+
+  // Celestial Eastern dragon: long wingless body, whiskers and a pearl (Qinglong).
+  function serpent(P, R, el) {
+    var s = shadow(100);
+    var body = 'M-130,-30 C-70,0 -30,-90 20,-70 C80,-48 104,-150 44,-172 C0,-188 6,-232 58,-244';
+    s += '<path d="' + body + '" fill="none" stroke="' + P.a + '" stroke-width="36" stroke-linecap="round"/>';
+    s += '<path d="' + body + '" fill="none" stroke="' + P.d + '" stroke-width="31" stroke-linecap="round"/>';
+    s += '<path d="' + body + '" fill="none" stroke="' + P.b + '" stroke-width="10" stroke-linecap="round" stroke-dasharray="6 8"/>';
+    [[-90, -38], [-40, -62], [10, -78], [66, -92], [62, -160], [20, -196]].forEach(function (pt) {
+      s += shape(P, 'M' + pt[0] + ',' + (pt[1] - 14) + ' l8,-18 l8,18Z', P.c);
+    });
+    s += limb(P, 'M-20,-60 L-30,-24 L-18,-16', 9) + limb(P, 'M70,-110 L96,-90 L104,-100', 9);
+    s += shape(P, 'M50,-256 C70,-274 112,-268 128,-248 C114,-234 84,-228 58,-232Z', P.d);
+    s += '<path d="M66,-266 L56,-296 M56,-284 L44,-292 M84,-268 L84,-300 M84,-288 L96,-298" stroke="' + P.c + '" stroke-width="4" stroke-linecap="round"/>';
+    s += '<path d="M124,-244 C150,-236 160,-210 176,-208 M120,-238 C140,-226 140,-196 156,-186" fill="none" stroke="' + P.c + '" stroke-width="2.5"/>';
+    s += eye(P, 98, -252, 4.5);
+    s += '<circle cx="-70" cy="-190" r="30" fill="' + P.c + '" opacity=".25"/><circle cx="-70" cy="-190" r="16" fill="' + P.c + '"/>';
+    return s;
+  }
+
+  var FIGURES = { sprite: sprite, archer: archer, knight: knight, mage: mage, seraph: seraph, tyrant: tyrant, beast: beast, dragon: dragon,
+    warrior: warrior, lancer: lancer, serpent: serpent };
+  var STYLE_SCALE = { sprite: 1.35, archer: 1.0, knight: 0.95, mage: 0.88, seraph: 0.76, tyrant: 0.86, beast: 1.0, dragon: 0.72,
+    warrior: 0.98, lancer: 0.92, serpent: 0.78 };
+  var STYLE_DX = { beast: -12, dragon: 8, serpent: -14 };
+  var RARITY_SCALE = { N: 0.92, HN: 0.96, R: 1, HR: 1.03, SR: 1.05, SSR: 1.1, L: 1.12 };
 
   var cache = {};
 
-  // o: { id, element, style, rarity }
+  // o: { id, element, style, rarity, faction }
   function render(o) {
-    var key = o.id + '|' + o.element + '|' + o.style + '|' + o.rarity;
+    var key = o.id + '|' + o.element + '|' + o.style + '|' + o.rarity + '|' + (o.faction || '');
     if (cache[key]) { return cache[key]; }
     var P = PAL[o.element] || PAL.light;
     var id = slug(o.id);
@@ -768,7 +946,7 @@ var Art = (function () {
     var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">';
     s += background(P, o.element, id, R);
     var i;
-    if (o.rarity === 'SSR') {
+    if (o.rarity === 'SSR' || o.rarity === 'L') {
       s += '<circle cx="150" cy="230" r="128" fill="' + P.c + '" opacity=".1"/>' +
         '<circle cx="150" cy="230" r="124" fill="none" stroke="' + P.c + '" stroke-width="2" stroke-dasharray="4 10" opacity=".7"/>' +
         '<circle cx="150" cy="230" r="150" fill="none" stroke="' + P.c + '" stroke-width="1.5" opacity=".35"/>';
@@ -777,8 +955,8 @@ var Art = (function () {
     }
     var fig = FIGURES[o.style] || FIGURES.sprite;
     var sc = (STYLE_SCALE[o.style] || 1) * (RARITY_SCALE[o.rarity] || 1);
-    s += '<g transform="translate(' + (150 + (STYLE_DX[o.style] || 0)) + ' 356) scale(' + n(sc * 100) / 100 + ')">' + fig(P, R, o.element) + '</g>';
-    var sparks = o.rarity === 'SSR' ? 14 : (o.rarity === 'SR' ? 7 : 0);
+    s += '<g transform="translate(' + (150 + (STYLE_DX[o.style] || 0)) + ' 356) scale(' + n(sc * 100) / 100 + ')">' + fig(P, R, o.element, o.faction) + '</g>';
+    var sparks = { L: 20, SSR: 14, SR: 7, HR: 3 }[o.rarity] || 0;
     for (i = 0; i < sparks; i++) {
       s += '<path d="' + spark(15 + R() * 270, 20 + R() * 330, 3 + R() * 6) + '" fill="' + P.c + '" opacity=".85"/>';
     }
@@ -789,8 +967,8 @@ var Art = (function () {
 
   var api = {
     // "look" picks the color scene (fire, water, wind, light, dark); it is art only.
-    card: function (def) { return render({ id: def.id, element: def.look, style: def.style, rarity: def.rarity }); },
-    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.look, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R' }); },
+    card: function (def) { return render({ id: def.id, element: def.look, style: def.style, rarity: def.rarity, faction: def.faction }); },
+    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.look, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R', faction: u.faction }); },
     render: render
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; }
@@ -961,9 +1139,12 @@ var Game = (function () {
 
     var rarities = [];
     for (var i = 0; i < count; i++) { rarities.push(rollWeighted(rateTable(), rand)); }
-    // A 10-summon always includes at least one Super Rare or better.
-    if (count === 10 && !rarities.some(function (r) { return r === 'SR' || r === 'SSR'; })) {
-      rarities[9] = rollWeighted({ SR: D.RARITIES.SR.rate, SSR: D.RARITIES.SSR.rate }, rand);
+    // A 10-summon always includes at least one card of CONFIG.tenPullGuarantee rarity or better.
+    var minIdx = D.RARITY_ORDER.indexOf(CFG.tenPullGuarantee);
+    if (count === 10 && !rarities.some(function (r) { return D.RARITY_ORDER.indexOf(r) >= minIdx; })) {
+      var high = {};
+      D.RARITY_ORDER.slice(minIdx).forEach(function (r) { high[r] = D.RARITIES[r].rate; });
+      rarities[9] = rollWeighted(high, rand);
     }
     var got = rarities.map(function (r) {
       var def = pickCardOfRarity(r, rand);
@@ -1253,10 +1434,15 @@ var Game = (function () {
     return levelsGained;
   }
 
-  function dropCard(state, stage, rand) {
+  // The cards a section can drop: one of each faction, as in the original.
+  function sectionDrops(stage) {
     var ch = D.CHAPTERS[stage.chapter - 1];
-    var def = pickCardOfRarity(rollWeighted(ch.dropWeights, rand), rand);
-    return addCard(state, def.id);
+    return stage.boss ? ch.bossDrops : ch.drops[stage.num - 1];
+  }
+
+  function dropCard(state, stage, rand) {
+    var ids = sectionDrops(stage);
+    return addCard(state, ids[Math.floor(rand() * ids.length)]);
   }
 
   // ---------- card skills ----------
@@ -1264,22 +1450,30 @@ var Game = (function () {
   function skillPct(def) {
     var pct = D.RARITIES[def.rarity].skill;
     if (def.skill.target !== 'all') { pct *= CFG.factionSkillMult; }
-    if (def.skill.type === 'atkDefUp') { pct *= 0.7; } // two stats, so each is a bit smaller
+    if (def.skill.stat === 'both') { pct *= 0.7; } // two stats, so each is a bit smaller
     return Math.round(pct);
   }
 
-  // Plain-English description, e.g. "+15% ATK to Fallen allies" or "Enemy DEF -10%".
+  // The skill described the way the original game worded it, e.g.
+  // "Great Boost to Fallen Attack/Defense" or "Medium Hit to Foes Defense (All)".
+  function skillTitle(def) {
+    var sk = def.skill;
+    var stat = sk.stat === 'atk' ? 'Attack' : (sk.stat === 'def' ? 'Defense' : 'Attack/Defense');
+    var tier = D.RARITIES[def.rarity].tier;
+    if (sk.kind === 'boost') {
+      return tier + ' Boost to ' + (sk.target === 'all' ? stat + ' (All)' : D.FACTIONS[sk.target].name + ' ' + stat);
+    }
+    return tier + ' Hit to Foes ' + (sk.target === 'all' ? stat + ' (All)' : D.FACTIONS[sk.target].name + ' ' + stat);
+  }
+
+  // Plain numbers, e.g. "+15% ATK to Fallen allies" or "-8% DEF to all enemies".
   function skillText(def) {
     var sk = def.skill, pct = skillPct(def);
-    var who = sk.target === 'all' ? 'all allies' : D.FACTIONS[sk.target].name + ' allies';
-    switch (sk.type) {
-      case 'atkUp': return '+' + pct + '% ATK to ' + who;
-      case 'defUp': return '+' + pct + '% DEF to ' + who;
-      case 'atkDefUp': return '+' + pct + '% ATK and DEF to ' + who;
-      case 'foeAtkDown': return 'Enemy ATK -' + pct + '%';
-      case 'foeDefDown': return 'Enemy DEF -' + pct + '%';
+    var stat = sk.stat === 'atk' ? 'ATK' : (sk.stat === 'def' ? 'DEF' : 'ATK and DEF');
+    if (sk.kind === 'boost') {
+      return '+' + pct + '% ' + stat + ' to ' + (sk.target === 'all' ? 'all allies' : D.FACTIONS[sk.target].name + ' allies');
     }
-    return '';
+    return '-' + pct + '% ' + stat + ' to ' + (sk.target === 'all' ? 'all enemies' : D.FACTIONS[sk.target].name + ' enemies');
   }
 
   // At the start of a battle each party card rolls to trigger its skill: the first slot
@@ -1292,19 +1486,14 @@ var Game = (function () {
       var roll = rand();
       if (roll >= (CFG.skillChanceBySlot[i] || 0)) { return; }
       var sk = def.skill, f = skillPct(def) / 100;
-      var allies = team.filter(function (a) { return sk.target === 'all' || a.faction === sk.target; });
-      function boost(list, atk, hp) {
-        list.forEach(function (x) {
-          if (atk) { x.atk = Math.round(x.atk * atk); }
-          if (hp) { x.hp = Math.round(x.hp * hp); x.maxHp = Math.round(x.maxHp * hp); }
-        });
-      }
-      if (sk.type === 'atkUp') { boost(allies, 1 + f, 0); }
-      else if (sk.type === 'defUp') { boost(allies, 0, 1 + f); }
-      else if (sk.type === 'atkDefUp') { boost(allies, 1 + f, 1 + f); }
-      else if (sk.type === 'foeAtkDown') { boost(enemies, 1 - f, 0); }
-      else if (sk.type === 'foeDefDown') { boost(enemies, 0, 1 - f); }
-      events.push({ t: 'skill', side: 'p', from: i, name: sk.name, text: skillText(def) });
+      var pool = sk.kind === 'boost' ? team : enemies;
+      var targets = pool.filter(function (a) { return sk.target === 'all' || a.faction === sk.target; });
+      var mult = sk.kind === 'boost' ? 1 + f : 1 - f;
+      targets.forEach(function (x) {
+        if (sk.stat !== 'def') { x.atk = Math.round(x.atk * mult); }
+        if (sk.stat !== 'atk') { x.hp = Math.round(x.hp * mult); x.maxHp = Math.round(x.maxHp * mult); }
+      });
+      events.push({ t: 'skill', side: 'p', from: i, name: sk.name, title: skillTitle(def), text: skillText(def), affected: targets.length });
     });
     return events;
   }
@@ -1439,6 +1628,8 @@ var Game = (function () {
     var out = {};
     for (var k in base) { out[k] = (s[k] !== undefined) ? s[k] : base[k]; }
     // Drop cards the game no longer knows about.
+    // Cards from earlier versions of the game become their replacements.
+    out.cards.forEach(function (c) { if (c && D.CARD_RENAMES[c.cardId]) { c.cardId = D.CARD_RENAMES[c.cardId]; } });
     out.cards = out.cards.filter(function (c) {
       return c && D.CARD_BY_ID[c.cardId] && typeof c.uid === 'number';
     });
@@ -1479,7 +1670,7 @@ var Game = (function () {
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
     spendPoint: spendPoint, useAmbrosia: useAmbrosia, setAlignment: setAlignment,
-    skillPct: skillPct, skillText: skillText, applySkills: applySkills,
+    skillPct: skillPct, skillText: skillText, skillTitle: skillTitle, applySkills: applySkills, sectionDrops: sectionDrops,
     treasureCounts: treasureCounts, treasureComplete: treasureComplete, claimTreasure: claimTreasure, stagePieces: stagePieces,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
@@ -1695,6 +1886,10 @@ var Game = (function () {
           '<div class="grow"><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') +
           (cleared ? ' <span class="cleared">Cleared</span>' : '') + '</div>' +
           '<div class="pips">' + pips(G.sectionProgress(state, s.id), s.monsters) + '</div>' +
+          '<div class="muted" style="font-size:12px">Drops: ' + G.sectionDrops(s).map(function (id) {
+            var d = D.CARD_BY_ID[id];
+            return icon(d.faction) + ' ' + d.name + ' <span class="rar-tag">' + d.rarity + '</span>';
+          }).join(' \u00B7 ') + '</div>' +
           '<div class="muted" style="font-size:12px">Treasure: ' + G.stagePieces(s).map(function (pi) {
             var have = G.treasureCounts(state, ch.id)[pi] > 0;
             return '<span class="tr' + (have ? ' have' : '') + '">\u25C6 ' + ch.treasure.pieces[pi] + '</span>';
@@ -1744,7 +1939,7 @@ var Game = (function () {
     var html = '<h2>Summon</h2><div class="panel"><div class="row wrap">' +
       '<button class="btn" data-action="summon" data-count="1"' + (state.gems < D.CONFIG.singlePullCost ? ' disabled' : '') + '>Summon x1 (' + D.CONFIG.singlePullCost + ' gems)</button>' +
       '<button class="btn" data-action="summon" data-count="10"' + (state.gems < D.CONFIG.tenPullCost ? ' disabled' : '') + '>Summon x10 (' + D.CONFIG.tenPullCost + ' gems)</button></div>' +
-      '<p class="muted">A x10 summon always includes at least one Super Rare or better.</p></div>' +
+      '<p class="muted">A x10 summon always includes at least one ' + D.RARITIES[D.CONFIG.tenPullGuarantee].name + ' or better.</p></div>' +
       '<h3>Rates</h3><table class="rates">';
     D.RARITY_ORDER.forEach(function (r) {
       html += '<tr><td>' + r + ' &ndash; ' + D.RARITIES[r].name + '</td><td>' + rates[r] + '%</td></tr>';
@@ -1825,7 +2020,7 @@ var Game = (function () {
     var rows = party.map(function (uid, i) {
       var def = D.CARD_BY_ID[G.findCard(state, uid).cardId];
       return '<div class="skill-row"><span class="pct">' + Math.round(D.CONFIG.skillChanceBySlot[i] * 100) + '%</span>' +
-        '<span class="grow"><b>' + def.skill.name + '</b> <span class="muted">(' + def.name + ')</span><br><span class="muted">' + G.skillText(def) + '</span></span></div>';
+        '<span class="grow"><b>' + def.skill.name + '</b> <span class="muted">(' + def.name + ')</span><br>' + G.skillTitle(def) + ' <span class="muted">(' + G.skillText(def) + ')</span></span></div>';
     }).join('');
     return '<h3>Party skills <span style="font-weight:400;font-size:12px">chance to trigger at the start of battle</span></h3><div class="panel" style="padding:6px 12px">' + rows + '</div>';
   }
@@ -1964,7 +2159,7 @@ var Game = (function () {
         var su = unitEl('p', e.from);
         if (su) { su.classList.add('skill'); }
         el('b-mid').textContent = e.name + '!';
-        el('b-log').textContent = names.p[e.from].name + ' \u2014 ' + e.name + ': ' + e.text;
+        el('b-log').textContent = names.p[e.from].name + ' \u2014 ' + e.title + ' (' + e.text + ')';
         await sleep(1100 / speed);
         if (su) { su.classList.remove('skill'); }
         continue;
@@ -2074,10 +2269,11 @@ var Game = (function () {
       '<h2 style="text-align:center">' + def.name + '</h2>' +
       '<p class="muted" style="text-align:center">' + icon(def.faction) + ' ' + D.FACTIONS[def.faction].name +
       (def.faction === state.alignment ? ' (your alignment, +' + alignPct() + '% in battle)' : '') +
-      ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
+      ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; ' + D.CARD_TYPES[def.type].name + ' type &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
       '<div class="panel">Level ' + card.level + ' / ' + st.maxLevel + (card.level < st.maxLevel ? ' &middot; exp ' + card.exp + ' / ' + G.cardExpToNext(card) : ' (max)') +
       '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; DEF ' + st.hp + '</div>' +
-      '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br><span class="muted">' + G.skillText(def) + '. Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
+      '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br>' + G.skillTitle(def) + ' <span class="muted">(' + G.skillText(def) + ')</span>' +
+      '<br><span class="muted" style="font-size:12px">Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
       '<div class="row wrap">' +
       '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Fuse</button>' +
       '<button class="btn" data-action="evolve-open" data-uid="' + uid + '">Evolve</button>' +

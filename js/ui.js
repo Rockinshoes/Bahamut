@@ -197,6 +197,10 @@
           '<div class="grow"><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') +
           (cleared ? ' <span class="cleared">Cleared</span>' : '') + '</div>' +
           '<div class="pips">' + pips(G.sectionProgress(state, s.id), s.monsters) + '</div>' +
+          '<div class="muted" style="font-size:12px">Drops: ' + G.sectionDrops(s).map(function (id) {
+            var d = D.CARD_BY_ID[id];
+            return icon(d.faction) + ' ' + d.name + ' <span class="rar-tag">' + d.rarity + '</span>';
+          }).join(' \u00B7 ') + '</div>' +
           '<div class="muted" style="font-size:12px">Treasure: ' + G.stagePieces(s).map(function (pi) {
             var have = G.treasureCounts(state, ch.id)[pi] > 0;
             return '<span class="tr' + (have ? ' have' : '') + '">\u25C6 ' + ch.treasure.pieces[pi] + '</span>';
@@ -246,7 +250,7 @@
     var html = '<h2>Summon</h2><div class="panel"><div class="row wrap">' +
       '<button class="btn" data-action="summon" data-count="1"' + (state.gems < D.CONFIG.singlePullCost ? ' disabled' : '') + '>Summon x1 (' + D.CONFIG.singlePullCost + ' gems)</button>' +
       '<button class="btn" data-action="summon" data-count="10"' + (state.gems < D.CONFIG.tenPullCost ? ' disabled' : '') + '>Summon x10 (' + D.CONFIG.tenPullCost + ' gems)</button></div>' +
-      '<p class="muted">A x10 summon always includes at least one Super Rare or better.</p></div>' +
+      '<p class="muted">A x10 summon always includes at least one ' + D.RARITIES[D.CONFIG.tenPullGuarantee].name + ' or better.</p></div>' +
       '<h3>Rates</h3><table class="rates">';
     D.RARITY_ORDER.forEach(function (r) {
       html += '<tr><td>' + r + ' &ndash; ' + D.RARITIES[r].name + '</td><td>' + rates[r] + '%</td></tr>';
@@ -327,7 +331,7 @@
     var rows = party.map(function (uid, i) {
       var def = D.CARD_BY_ID[G.findCard(state, uid).cardId];
       return '<div class="skill-row"><span class="pct">' + Math.round(D.CONFIG.skillChanceBySlot[i] * 100) + '%</span>' +
-        '<span class="grow"><b>' + def.skill.name + '</b> <span class="muted">(' + def.name + ')</span><br><span class="muted">' + G.skillText(def) + '</span></span></div>';
+        '<span class="grow"><b>' + def.skill.name + '</b> <span class="muted">(' + def.name + ')</span><br>' + G.skillTitle(def) + ' <span class="muted">(' + G.skillText(def) + ')</span></span></div>';
     }).join('');
     return '<h3>Party skills <span style="font-weight:400;font-size:12px">chance to trigger at the start of battle</span></h3><div class="panel" style="padding:6px 12px">' + rows + '</div>';
   }
@@ -466,7 +470,7 @@
         var su = unitEl('p', e.from);
         if (su) { su.classList.add('skill'); }
         el('b-mid').textContent = e.name + '!';
-        el('b-log').textContent = names.p[e.from].name + ' \u2014 ' + e.name + ': ' + e.text;
+        el('b-log').textContent = names.p[e.from].name + ' \u2014 ' + e.title + ' (' + e.text + ')';
         await sleep(1100 / speed);
         if (su) { su.classList.remove('skill'); }
         continue;
@@ -576,10 +580,11 @@
       '<h2 style="text-align:center">' + def.name + '</h2>' +
       '<p class="muted" style="text-align:center">' + icon(def.faction) + ' ' + D.FACTIONS[def.faction].name +
       (def.faction === state.alignment ? ' (your alignment, +' + alignPct() + '% in battle)' : '') +
-      ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
+      ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; ' + D.CARD_TYPES[def.type].name + ' type &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
       '<div class="panel">Level ' + card.level + ' / ' + st.maxLevel + (card.level < st.maxLevel ? ' &middot; exp ' + card.exp + ' / ' + G.cardExpToNext(card) : ' (max)') +
       '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; DEF ' + st.hp + '</div>' +
-      '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br><span class="muted">' + G.skillText(def) + '. Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
+      '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br>' + G.skillTitle(def) + ' <span class="muted">(' + G.skillText(def) + ')</span>' +
+      '<br><span class="muted" style="font-size:12px">Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
       '<div class="row wrap">' +
       '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Fuse</button>' +
       '<button class="btn" data-action="evolve-open" data-uid="' + uid + '">Evolve</button>' +

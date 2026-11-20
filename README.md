@@ -24,9 +24,18 @@ Every card belongs to one of three factions. There is **no damage weakness** bet
 
 | Faction | Leaning |
 | --- | --- |
-| **Mortal** | Balanced stats. Each card costs 1 less in your party. |
-| **Immortal** | The toughest cards: high DEF, lower ATK. |
-| **Fallen** | The hardest hitters: high ATK, lower DEF. |
+| **Mortal** | Humans only: knights, archers, mages, warriors. Balanced; each card costs 1 less in your party. |
+| **Immortal** | Gods, angels, fairies, celestial beasts and celestial dragons. Higher DEF, lower ATK. |
+| **Fallen** | Demons, monsters, undead and chaos dragons. Higher ATK, lower DEF. |
+
+Dragons follow the original: they belong to the gods (its Bahamut "stood with the gods", and Qinglong was a God card)
+or to the demons (Tiamat, Jormungand and Hydra were Demon cards), never to humans.
+
+## Cards
+
+There are 42 cards, 14 per faction, named after public-domain gods, heroes and monsters or with generic titles.
+Rarities follow the original: **Normal, High Normal, Rare, High Rare, S Rare, SS Rare and Legend**. Most cards
+are **Attack type** (more ATK) or **Defense type** (more DEF), with a few Balanced.
 
 When you start a game you pick an **alignment** and get its starter pack: **one champion** of that faction
 (Mortal: Flame Warden, Immortal: Halo Seraph, Fallen: Night Sorceress). You do not start with a full party;
@@ -42,16 +51,19 @@ You can still use any card. (More > Change alignment switches it later.)
 3. **Watch the battle.** First your cards' **skills** may trigger, then both sides attack in rounds. Each hit takes
    ATK x 0.2 off the target's DEF; a card at 0 DEF is knocked out. Use 1x / 2x / 4x speed, or **Skip**.
 4. **Collect rewards.** Every win costs stamina and gives **1 exp per stamina** (like the original) and gold, and
-   monsters sometimes drop a card or a **treasure piece**. After **3 monsters** a **treasure chest** opens (gold and a
+   monsters sometimes drop a card or a **treasure piece**. As in the original, every section drops one card of
+   **each faction**, and the quest list shows which three. After **3 monsters** a **treasure chest** opens (gold and a
    likely card) and the section is cleared. The **boss** always drops a card and an **Ambrosia** (refills all your stamina).
 5. **A lost battle costs nothing.** Change your party, level up your cards, and try again.
 
 Cleared sections can be replayed to farm cards and gold. First clears also give gems.
 
 ### Card skills
-Every card has a skill that can trigger at the start of a battle and lasts the whole fight: ATK Up, DEF Up,
-ATK & DEF Up, Enemy ATK Down or Enemy DEF Down. Strength grows with rarity (5% for N up to 20% for SSR).
-Some skills only help one faction but are 1.5x stronger, which rewards building around your alignment.
+Every card has a skill that can trigger at the start of a battle and lasts the whole fight. Skills are worded
+like the original's: a **Boost** raises your cards ("Big Boost to Immortal Defense"), a **Hit** lowers the
+enemy's ("Medium Hit to Foes Defense (All)"). The strength word follows rarity: Small (N, HN), Medium (R),
+Big (HR), Great (SR), Massive (SSR), Absolute (Legend). Skills aimed at one faction are 1.5x stronger, which
+rewards building around your alignment; a Hit aimed at one faction only weakens enemies of that faction.
 
 Whether a skill triggers depends on the card's **party slot**: slot 1 always, then 80%, 60%, 40% and 20%.
 (The 100/80/60% figures come from players of the original; 40% and 20% are filled in.) The party screen lists
@@ -101,9 +113,15 @@ to GitHub by accident. If you want art in the repo, you'd have to change `.gitig
 
 Most tweaks are one-line edits in **`js/data.js`**:
 
-- Add a card: add a line to `CARD_LIST`, like `['my-card', 'My Card', 'fallen', 'SR', 'knight', 'fire']`.
-  The faction is `mortal`, `immortal` or `fallen`. The last two values only pick the placeholder drawing:
-  a style (`sprite`, `archer`, `knight`, `mage`, `beast`, `dragon`, `seraph`, `tyrant`) and a color scene (`fire`, `water`, `wind`, `light`, `dark`).
+- Add a card: add a line to `CARD_LIST`, like
+  `['my-card', 'My Card', 'fallen', 'SR', 'atk', 'knight', 'fire', 'Skill Name', 'boost', 'atk', 'fallen']`:
+  id, name, faction (`mortal`/`immortal`/`fallen`), rarity (`N`, `HN`, `R`, `HR`, `SR`, `SSR`, `L`), type (`atk`/`def`/`bal`),
+  art style, art color scene (`fire`, `water`, `wind`, `light`, `dark`), and the skill: name, kind (`boost`/`hit`),
+  stat (`atk`/`def`/`both`), target (`all` or a faction).
+  Art styles: humans use `archer`, `knight`, `mage`, `warrior`, `lancer`; Immortal versions get a halo and wings automatically,
+  Fallen versions get horns. Immortal can also use `sprite` (fairy), `beast`, `seraph`, `serpent` (celestial dragon);
+  Fallen can use `sprite` (imp), `beast`, `tyrant`, `dragon` (chaos dragon).
+- Change which cards a section drops: `drops` and `bossDrops` in `CHAPTERS`.
 - Change a card's skill: the last three values of its line in `CARD_LIST`. Skill strengths: `RARITIES`.
   Trigger chances, treasure drop rates and exp per stamina: `CONFIG`. Treasure sets: `CHAPTERS`.
 - Change how each faction leans: `FACTIONS`. The alignment bonus, starting ATK PWR, starting gems and starter packs: `CONFIG`.

@@ -150,21 +150,59 @@ var Art = (function () {
     return shape(P, 'M' + x + ',' + (y - 34) + ' L' + (x + 10) + ',' + (y - 14) + ' L' + x + ',' + y + ' L' + (x - 10) + ',' + (y - 14) + 'Z', P.c);
   }
 
+  // ---------- faction overlays ----------
+  // Immortal (gods): halo, and feathered wings on armored figures.
+  // Fallen (demons): horns, and bat wings on robed or armored figures.
+  // Mortal (humans): nothing extra.
+  function featherWing(P) {
+    return shape(P, 'M-26,-172 C-96,-250 -150,-210 -138,-120 C-120,-150 -92,-146 -70,-128 C-62,-112 -44,-118 -26,-138Z', P.c) +
+      '<path d="M-60,-190 L-112,-156 M-70,-170 L-124,-136 M-80,-150 L-128,-126" stroke="' + P.b + '" stroke-width="2" opacity=".6"/>';
+  }
+  function batWing(P) {
+    return shape(P, 'M-26,-170 L-120,-236 L-108,-190 L-150,-196 L-122,-150 L-150,-130 L-96,-128 L-60,-112 L-30,-134Z', P.b) +
+      '<path d="M-26,-170 L-108,-190 M-26,-170 L-122,-150 M-26,-170 L-96,-128" stroke="' + P.a + '" stroke-width="1.5" opacity=".7"/>';
+  }
+  function backOverlay(P, fx, wings) {
+    if (!wings) { return ''; }
+    if (fx === 'immortal') { var w = featherWing(P); return w + mirror(w); }
+    if (fx === 'fallen') { var b = batWing(P); return b + mirror(b); }
+    return '';
+  }
+  // Halo or horns for a head centred at (0, y) with radius r.
+  function headOverlay(P, fx, y, r) {
+    if (fx === 'immortal') {
+      return '<ellipse cx="0" cy="' + (y - r - 12) + '" rx="' + (r + 4) + '" ry="7" fill="none" stroke="' + P.c + '" stroke-width="5"/>' +
+        '<ellipse cx="0" cy="' + (y - r - 12) + '" rx="' + (r + 4) + '" ry="7" fill="none" stroke="#fff" stroke-width="1.5" opacity=".8"/>';
+    }
+    if (fx === 'fallen') {
+      var t = y - r + 6;
+      return shape(P, 'M-' + (r - 6) + ',' + t + ' C-' + (r + 10) + ',' + (t - 10) + ' -' + (r + 14) + ',' + (t - 30) + ' -' + (r + 4) + ',' + (t - 44) +
+          ' C-' + (r + 2) + ',' + (t - 26) + ' -' + (r - 6) + ',' + (t - 16) + ' -' + (r - 14) + ',' + (t - 6) + 'Z', P.a) +
+        shape(P, 'M' + (r - 6) + ',' + t + ' C' + (r + 10) + ',' + (t - 10) + ' ' + (r + 14) + ',' + (t - 30) + ' ' + (r + 4) + ',' + (t - 44) +
+          ' C' + (r + 2) + ',' + (t - 26) + ' ' + (r - 6) + ',' + (t - 16) + ' ' + (r - 14) + ',' + (t - 6) + 'Z', P.a);
+    }
+    return '';
+  }
+
   // ---------- figures ----------
-  function sprite(P, R, el) {
+  function sprite(P, R, el, fx) {
+    var fairy = fx === 'immortal';
     var s = shadow(38);
-    s += limb(P, 'M14,-34 C46,-30 58,-72 38,-88', 6);
-    s += shape(P, 'M-14,-84 C-62,-132 -96,-96 -62,-68 C-74,-60 -44,-56 -16,-62Z', P.b);
-    s += shape(P, 'M14,-84 C62,-132 96,-96 62,-68 C74,-60 44,-56 16,-62Z', P.b);
+    if (!fairy) { s += limb(P, 'M14,-34 C46,-30 58,-72 38,-88', 6); }
+    var wingFill = fairy ? P.c : P.b;
+    s += '<g opacity="' + (fairy ? '.8' : '1') + '">' +
+      shape(P, 'M-14,-84 C-62,-132 -96,-96 -62,-68 C-74,-60 -44,-56 -16,-62Z', wingFill) +
+      shape(P, 'M14,-84 C62,-132 96,-96 62,-68 C74,-60 44,-56 16,-62Z', wingFill) + '</g>';
     s += limb(P, 'M-12,-14 L-14,-2', 10) + limb(P, 'M12,-14 L14,-2', 10);
     s += '<ellipse cx="0" cy="-48" rx="30" ry="38" fill="' + P.d + '" stroke="' + P.a + '" stroke-width="2.5"/>';
     s += '<ellipse cx="0" cy="-42" rx="17" ry="24" fill="' + P.b + '" opacity=".75"/>';
     s += limb(P, 'M-26,-56 L-42,-40', 9) + limb(P, 'M26,-56 L42,-40', 9);
     s += '<circle cx="0" cy="-104" r="34" fill="' + P.d + '" stroke="' + P.a + '" stroke-width="2.5"/>';
-    s += shape(P, 'M-26,-124 L-34,-156 L-12,-132Z', P.a) + shape(P, 'M26,-124 L34,-156 L12,-132Z', P.a);
+    if (fairy) { s += headOverlay(P, 'immortal', -104, 34); }
+    else { s += shape(P, 'M-26,-124 L-34,-156 L-12,-132Z', P.a) + shape(P, 'M26,-124 L34,-156 L12,-132Z', P.a); }
     s += eye(P, -13, -106, 6) + eye(P, 13, -106, 6);
     s += '<path d="M-9,-86 Q0,-79 9,-86" stroke="' + P.c + '" stroke-width="3" fill="none" stroke-linecap="round"/>';
-    s += accent(P, el, 0, -150);
+    if (!fx) { s += accent(P, el, 0, -150); }
     return s;
   }
 
@@ -193,7 +231,7 @@ var Art = (function () {
       eye(P, -9, y + 2, 4.5) + eye(P, 9, y + 2, 4.5);
   }
 
-  function archer(P, R, el) {
+  function archer(P, R, el, fx) {
     var s = shadow(46);
     s += shape(P, 'M30,-190 L46,-198 L56,-148 L40,-142Z', P.b);
     s += '<path d="M40,-198 L36,-214 M46,-196 L46,-214 M52,-194 L56,-212" stroke="' + P.c + '" stroke-width="2.5"/>';
@@ -205,12 +243,13 @@ var Art = (function () {
     s += '<path d="M-90,-224 C-144,-176 -144,-108 -90,-60" fill="none" stroke="' + P.c + '" stroke-width="6" stroke-linecap="round"/>';
     s += '<path d="M-90,-224 L-40,-144 L-90,-60" fill="none" stroke="#fff" stroke-width="1.5" opacity=".7"/>';
     s += '<path d="M-96,-143 L-30,-143" stroke="' + P.a + '" stroke-width="3"/>' + shape(P, 'M-100,-143 L-86,-150 L-86,-136Z', P.c);
-    s += accent(P, el, 0, -242);
+    s += fx ? headOverlay(P, fx, -206, 23) : '';
     return s;
   }
 
-  function knight(P, R, el) {
+  function knight(P, R, el, fx) {
     var s = shadow(50);
+    s += backOverlay(P, fx, true);
     s += human(P, { cape: P.b });
     s += '<ellipse cx="-46" cy="-172" rx="19" ry="13" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
     s += '<ellipse cx="46" cy="-172" rx="19" ry="13" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
@@ -224,12 +263,13 @@ var Art = (function () {
     s += '<path d="M52,-126 H84" stroke="' + P.a + '" stroke-width="7" stroke-linecap="round"/>';
     s += shape(P, 'M-94,-152 L-50,-152 L-50,-112 C-50,-86 -72,-72 -72,-72 C-72,-72 -94,-86 -94,-112Z', P.b);
     s += shape(P, 'M-72,-136 L-62,-116 L-72,-96 L-82,-116Z', P.c);
-    s += accent(P, el, 0, -244);
+    s += fx ? headOverlay(P, fx, -206, 26) : '';
     return s;
   }
 
-  function mage(P, R, el) {
+  function mage(P, R, el, fx) {
     var s = shadow(58);
+    s += backOverlay(P, fx === 'fallen' ? fx : null, true);
     s += human(P, { robe: true });
     s += limb(P, 'M36,-168 L60,-152 L68,-146', 14);
     s += limb(P, 'M-36,-168 L-60,-192 L-66,-212', 14);
@@ -241,7 +281,12 @@ var Art = (function () {
     s += shape(P, 'M-36,-226 L0,-296 L36,-226 Q0,-214 -36,-226Z', P.b);
     s += '<ellipse cx="0" cy="-224" rx="42" ry="9" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
     s += '<circle cx="0" cy="-246" r="5" fill="' + P.c + '"/>';
-    s += accent(P, el, 0, -298);
+    if (fx === 'immortal') {
+      s += '<ellipse cx="0" cy="-306" rx="26" ry="7" fill="none" stroke="' + P.c + '" stroke-width="5"/>';
+    } else if (fx === 'fallen') {
+      s += shape(P, 'M-30,-232 C-50,-246 -56,-268 -46,-284 C-44,-266 -36,-254 -24,-238Z', P.a) +
+        shape(P, 'M30,-232 C50,-246 56,-268 46,-284 C44,-266 36,-254 24,-238Z', P.a);
+    }
     return s;
   }
 
@@ -277,8 +322,13 @@ var Art = (function () {
     return s;
   }
 
-  function beast(P, R, el) {
+  function beast(P, R, el, fx) {
     var s = shadow(76);
+    if (fx === 'immortal') {
+      // Feathered wings for celestial beasts (Pegasus and friends).
+      s += '<g transform="translate(-6 -90) rotate(-10)">' + shape(P, 'M0,0 C-30,-90 -110,-110 -120,-60 C-90,-70 -60,-50 -40,-20Z', P.c) +
+        '<path d="M-20,-30 L-90,-74 M-30,-14 L-104,-54" stroke="' + P.b + '" stroke-width="2" opacity=".6"/></g>';
+    }
     s += limb(P, 'M-62,-84 C-106,-112 -120,-60 -96,-34', 10);
     s += limb(P, 'M-42,-52 L-46,-6', 16) + limb(P, 'M-18,-52 L-16,-6', 16);
     s += '<ellipse cx="0" cy="-74" rx="68" ry="36" fill="' + P.d + '" stroke="' + P.a + '" stroke-width="2.5"/>';
@@ -294,7 +344,14 @@ var Art = (function () {
     s += '<circle cx="143" cy="-106" r="4" fill="' + P.c + '"/>';
     s += shape(P, 'M120,-94 L125,-80 L130,-95Z', P.c);
     s += eye(P, 96, -120, 4.5);
-    s += accent(P, el, 96, -150);
+    if (fx === 'immortal') {
+      s += '<ellipse cx="88" cy="-158" rx="24" ry="6" fill="none" stroke="' + P.c + '" stroke-width="4"/>';
+    } else if (fx === 'fallen') {
+      s += shape(P, 'M76,-134 C64,-152 66,-170 80,-180 C76,-164 80,-152 88,-140Z', P.a) +
+        shape(P, 'M98,-134 C102,-154 112,-166 128,-170 C118,-158 112,-148 106,-134Z', P.a);
+    } else {
+      s += accent(P, el, 96, -150);
+    }
     return s;
   }
 
@@ -317,16 +374,70 @@ var Art = (function () {
     return s;
   }
 
-  var FIGURES = { sprite: sprite, archer: archer, knight: knight, mage: mage, seraph: seraph, tyrant: tyrant, beast: beast, dragon: dragon };
-  var STYLE_SCALE = { sprite: 1.35, archer: 1.0, knight: 1.0, mage: 0.9, seraph: 0.76, tyrant: 0.86, beast: 1.0, dragon: 0.72 };
-  var STYLE_DX = { beast: -12, dragon: 8 };
-  var RARITY_SCALE = { N: 0.92, R: 1, SR: 1.05, SSR: 1.1 };
+  // Axe-wielding fighter (berserker, mercenary, ghoul brute, Siegfried).
+  function warrior(P, R, el, fx) {
+    var s = shadow(56);
+    s += human(P, { wide: true });
+    s += '<path d="M-36,-40 L74,-262" stroke="' + P.a + '" stroke-width="7" stroke-linecap="round"/>';
+    s += shape(P, 'M62,-270 C100,-272 112,-232 100,-206 C88,-222 74,-230 52,-234Z', P.c);
+    s += shape(P, 'M60,-240 C40,-262 30,-280 40,-296 C52,-280 62,-266 70,-256Z', P.c);
+    s += limb(P, 'M-46,-168 L-30,-130 L6,-112', 17) + limb(P, 'M46,-168 L58,-140 L40,-150', 17);
+    s += head(P, 24, -208);
+    s += shape(P, 'M-25,-214 C-22,-242 22,-242 25,-214 C12,-226 -12,-226 -25,-214Z', P.b);
+    s += '<path d="M-24,-218 H24" stroke="' + P.c + '" stroke-width="3"/>';
+    s += fx ? headOverlay(P, fx, -208, 24) : '';
+    return s;
+  }
+
+  // Spear fighter (militia, high lancer, Achilles, Valkyrie, Odin).
+  function lancer(P, R, el, fx) {
+    var s = shadow(48);
+    s += backOverlay(P, fx, true);
+    s += human(P, { cape: P.b });
+    s += '<path d="M58,0 L58,-300" stroke="' + P.a + '" stroke-width="6" stroke-linecap="round"/>';
+    s += shape(P, 'M50,-298 L58,-336 L66,-298 L58,-290Z', P.c);
+    s += '<path d="M48,-292 H68" stroke="' + P.c + '" stroke-width="4" stroke-linecap="round"/>';
+    s += limb(P, 'M40,-166 L58,-140 L58,-118', 15) + limb(P, 'M-40,-166 L-54,-128 L-40,-106', 15);
+    s += '<ellipse cx="-62" cy="-118" rx="26" ry="32" fill="' + P.b + '" stroke="' + P.a + '" stroke-width="2"/>';
+    s += '<circle cx="-62" cy="-118" r="8" fill="' + P.c + '"/>';
+    s += head(P, 23, -206);
+    s += shape(P, 'M-26,-208 C-26,-246 26,-246 26,-208 L20,-200 L-20,-200Z', P.b);
+    s += '<path d="M0,-238 L0,-196" stroke="' + P.c + '" stroke-width="3"/>';
+    s += fx ? headOverlay(P, fx, -206, 26) : shape(P, 'M-2,-240 C-20,-270 10,-280 14,-252Z', P.a);
+    return s;
+  }
+
+  // Celestial Eastern dragon: long wingless body, whiskers and a pearl (Qinglong).
+  function serpent(P, R, el) {
+    var s = shadow(100);
+    var body = 'M-130,-30 C-70,0 -30,-90 20,-70 C80,-48 104,-150 44,-172 C0,-188 6,-232 58,-244';
+    s += '<path d="' + body + '" fill="none" stroke="' + P.a + '" stroke-width="36" stroke-linecap="round"/>';
+    s += '<path d="' + body + '" fill="none" stroke="' + P.d + '" stroke-width="31" stroke-linecap="round"/>';
+    s += '<path d="' + body + '" fill="none" stroke="' + P.b + '" stroke-width="10" stroke-linecap="round" stroke-dasharray="6 8"/>';
+    [[-90, -38], [-40, -62], [10, -78], [66, -92], [62, -160], [20, -196]].forEach(function (pt) {
+      s += shape(P, 'M' + pt[0] + ',' + (pt[1] - 14) + ' l8,-18 l8,18Z', P.c);
+    });
+    s += limb(P, 'M-20,-60 L-30,-24 L-18,-16', 9) + limb(P, 'M70,-110 L96,-90 L104,-100', 9);
+    s += shape(P, 'M50,-256 C70,-274 112,-268 128,-248 C114,-234 84,-228 58,-232Z', P.d);
+    s += '<path d="M66,-266 L56,-296 M56,-284 L44,-292 M84,-268 L84,-300 M84,-288 L96,-298" stroke="' + P.c + '" stroke-width="4" stroke-linecap="round"/>';
+    s += '<path d="M124,-244 C150,-236 160,-210 176,-208 M120,-238 C140,-226 140,-196 156,-186" fill="none" stroke="' + P.c + '" stroke-width="2.5"/>';
+    s += eye(P, 98, -252, 4.5);
+    s += '<circle cx="-70" cy="-190" r="30" fill="' + P.c + '" opacity=".25"/><circle cx="-70" cy="-190" r="16" fill="' + P.c + '"/>';
+    return s;
+  }
+
+  var FIGURES = { sprite: sprite, archer: archer, knight: knight, mage: mage, seraph: seraph, tyrant: tyrant, beast: beast, dragon: dragon,
+    warrior: warrior, lancer: lancer, serpent: serpent };
+  var STYLE_SCALE = { sprite: 1.35, archer: 1.0, knight: 0.95, mage: 0.88, seraph: 0.76, tyrant: 0.86, beast: 1.0, dragon: 0.72,
+    warrior: 0.98, lancer: 0.92, serpent: 0.78 };
+  var STYLE_DX = { beast: -12, dragon: 8, serpent: -14 };
+  var RARITY_SCALE = { N: 0.92, HN: 0.96, R: 1, HR: 1.03, SR: 1.05, SSR: 1.1, L: 1.12 };
 
   var cache = {};
 
-  // o: { id, element, style, rarity }
+  // o: { id, element, style, rarity, faction }
   function render(o) {
-    var key = o.id + '|' + o.element + '|' + o.style + '|' + o.rarity;
+    var key = o.id + '|' + o.element + '|' + o.style + '|' + o.rarity + '|' + (o.faction || '');
     if (cache[key]) { return cache[key]; }
     var P = PAL[o.element] || PAL.light;
     var id = slug(o.id);
@@ -334,7 +445,7 @@ var Art = (function () {
     var s = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 420" preserveAspectRatio="xMidYMid slice" aria-hidden="true" focusable="false">';
     s += background(P, o.element, id, R);
     var i;
-    if (o.rarity === 'SSR') {
+    if (o.rarity === 'SSR' || o.rarity === 'L') {
       s += '<circle cx="150" cy="230" r="128" fill="' + P.c + '" opacity=".1"/>' +
         '<circle cx="150" cy="230" r="124" fill="none" stroke="' + P.c + '" stroke-width="2" stroke-dasharray="4 10" opacity=".7"/>' +
         '<circle cx="150" cy="230" r="150" fill="none" stroke="' + P.c + '" stroke-width="1.5" opacity=".35"/>';
@@ -343,8 +454,8 @@ var Art = (function () {
     }
     var fig = FIGURES[o.style] || FIGURES.sprite;
     var sc = (STYLE_SCALE[o.style] || 1) * (RARITY_SCALE[o.rarity] || 1);
-    s += '<g transform="translate(' + (150 + (STYLE_DX[o.style] || 0)) + ' 356) scale(' + n(sc * 100) / 100 + ')">' + fig(P, R, o.element) + '</g>';
-    var sparks = o.rarity === 'SSR' ? 14 : (o.rarity === 'SR' ? 7 : 0);
+    s += '<g transform="translate(' + (150 + (STYLE_DX[o.style] || 0)) + ' 356) scale(' + n(sc * 100) / 100 + ')">' + fig(P, R, o.element, o.faction) + '</g>';
+    var sparks = { L: 20, SSR: 14, SR: 7, HR: 3 }[o.rarity] || 0;
     for (i = 0; i < sparks; i++) {
       s += '<path d="' + spark(15 + R() * 270, 20 + R() * 330, 3 + R() * 6) + '" fill="' + P.c + '" opacity=".85"/>';
     }
@@ -355,8 +466,8 @@ var Art = (function () {
 
   var api = {
     // "look" picks the color scene (fire, water, wind, light, dark); it is art only.
-    card: function (def) { return render({ id: def.id, element: def.look, style: def.style, rarity: def.rarity }); },
-    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.look, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R' }); },
+    card: function (def) { return render({ id: def.id, element: def.look, style: def.style, rarity: def.rarity, faction: def.faction }); },
+    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.look, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R', faction: u.faction }); },
     render: render
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; }

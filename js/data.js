@@ -3,135 +3,189 @@
  * Edit this file to add cards or change balance. No other file needs to change
  * when you add a card (just add a line to the CARD_LIST below).
  *
+ * The conventions follow the original Rage of Bahamut (2012 English version):
+ *  - three realms: Man, Gods, Demons (here: Mortal, Immortal, Fallen)
+ *  - rarities Normal, High Normal, Rare, High Rare, S Rare, SS Rare, Legend
+ *  - most cards lean to attack or to defense
+ *  - skills read like "Big Boost to Gods Attack" or "Medium Hit to Foes Defense (All)",
+ *    with strength tiers Small, Medium, Big, Great, Massive, Absolute
+ *  - every quest section drops one card of each realm
+ *
  * Art: the game draws placeholder art for every card automatically (js/art.js).
- * To use your own, put an image at  assets/cards/<card-id>.png  and it replaces
- * the placeholder.
+ * To use your own, put an image at  assets/cards/<card-id>.png  and it replaces it.
  */
 var GameData = (function () {
   'use strict';
 
-  // Three factions, like the original's Man / God / Demon. There is no damage weakness
-  // between them. Each leans a different way, and cards matching the alignment you
-  // picked at the start get a small bonus (CONFIG.alignmentBonus). Mortal cards cost 1 less,
-  // which matters because your party's total cost can't go over your ATK PWR.
+  // Three factions. There is no damage weakness between them; each leans a different way,
+  // and cards matching the alignment you picked get a small bonus (CONFIG.alignmentBonus).
+  // Mortal cards cost 1 less, which matters because party cost can't exceed your ATK PWR.
+  // Art rule: Mortal cards are always human, Immortal are gods/angels/fairies/celestial
+  // beasts, Fallen are demons/monsters. Dragons belong to Immortal (celestial, like the
+  // original's Bahamut and Qinglong) and Fallen (chaos dragons, like Tiamat) - never Mortal.
   var FACTIONS = {
     mortal:   { name: 'Mortal',   icon: '⚔', color: '#5fbf7f', atkMod: 1.0,  hpMod: 1.0,  costMod: -1,
-                blurb: 'Balanced fighters. Cost 1 less in your party.' },
-    immortal: { name: 'Immortal', icon: '✦', color: '#f0c75e', atkMod: 0.85, hpMod: 1.25, costMod: 0,
-                blurb: 'The toughest cards. High DEF, lower ATK.' },
-    fallen:   { name: 'Fallen',   icon: '☠', color: '#c05bd6', atkMod: 1.25, hpMod: 0.85, costMod: 0,
-                blurb: 'The hardest hitters. High ATK, lower DEF.' }
+                blurb: 'Humans: knights, archers, mages. Balanced, and each card costs 1 less in your party.' },
+    immortal: { name: 'Immortal', icon: '✦', color: '#f0c75e', atkMod: 0.9,  hpMod: 1.15, costMod: 0,
+                blurb: 'Gods, angels and celestial beasts. Sturdy: higher DEF, lower ATK.' },
+    fallen:   { name: 'Fallen',   icon: '☠', color: '#c05bd6', atkMod: 1.15, hpMod: 0.9,  costMod: 0,
+                blurb: 'Demons, monsters and chaos dragons. Fierce: higher ATK, lower DEF.' }
   };
   var FACTION_ORDER = ['mortal', 'immortal', 'fallen'];
 
   // Cards have ATK and DEF, like the original. In a battle, DEF is how much damage a card
   // can take before it is knocked out, and each hit deals ATK x CONFIG.damagePerAtk.
-  // rate = percent chance per summon. cost = deck cost. fuseExp = exp this card gives when fused.
-  // skill = strength (%) of the card's skill at this rarity.
+  // rate = percent chance per summon. cost = party cost. fuseExp = exp this card gives when fused.
+  // skill = skill strength (%) at this rarity, and tier = how the original named that strength.
   var RARITIES = {
-    N:   { name: 'Normal',     rate: 50, cost: 3,  atk: 100, def: 100, fuseExp: 20,  sell: 20,  skill: 5  },
-    R:   { name: 'Rare',       rate: 33, cost: 5,  atk: 160, def: 150, fuseExp: 45,  sell: 50,  skill: 10 },
-    SR:  { name: 'Super Rare', rate: 13, cost: 8,  atk: 250, def: 230, fuseExp: 100, sell: 120, skill: 15 },
-    SSR: { name: 'Legendary',  rate: 4,  cost: 12, atk: 400, def: 360, fuseExp: 220, sell: 300, skill: 20 }
+    N:   { name: 'Normal',      rate: 40,  cost: 3,  atk: 100, def: 100, fuseExp: 20,  sell: 20,  skill: 5,  tier: 'Small' },
+    HN:  { name: 'High Normal', rate: 25,  cost: 4,  atk: 130, def: 125, fuseExp: 30,  sell: 35,  skill: 6,  tier: 'Small' },
+    R:   { name: 'Rare',        rate: 18,  cost: 5,  atk: 160, def: 150, fuseExp: 45,  sell: 50,  skill: 8,  tier: 'Medium' },
+    HR:  { name: 'High Rare',   rate: 10,  cost: 6,  atk: 200, def: 190, fuseExp: 70,  sell: 80,  skill: 10, tier: 'Big' },
+    SR:  { name: 'S Rare',      rate: 5,   cost: 8,  atk: 250, def: 230, fuseExp: 100, sell: 120, skill: 13, tier: 'Great' },
+    SSR: { name: 'SS Rare',     rate: 1.7, cost: 12, atk: 400, def: 360, fuseExp: 220, sell: 300, skill: 16, tier: 'Massive' },
+    L:   { name: 'Legend',      rate: 0.3, cost: 15, atk: 520, def: 480, fuseExp: 300, sell: 500, skill: 20, tier: 'Absolute' }
+  };
+  var RARITY_ORDER = ['N', 'HN', 'R', 'HR', 'SR', 'SSR', 'L'];
+
+  // Card types: like the original, most cards are built to attack or to defend.
+  var CARD_TYPES = {
+    atk: { name: 'Attack',   atk: 1.15, def: 0.85 },
+    def: { name: 'Defense',  atk: 0.85, def: 1.15 },
+    bal: { name: 'Balanced', atk: 1.0,  def: 1.0 }
   };
 
-  // Card skills. Each has a chance to trigger at the start of a battle (see
-  // CONFIG.skillChanceBySlot) and then lasts the whole battle.
-  //   atkUp     +X% ATK to allies           defUp     +X% DEF to allies
-  //   atkDefUp  +X% ATK and DEF to allies   foeAtkDown / foeDefDown  -X% to every enemy
-  // A skill aimed at one faction ("fallen") only helps allies of that faction, but is
-  // CONFIG.factionSkillMult times stronger. That rewards building around your alignment.
-  var SKILL_TYPES = {
-    atkUp:      { label: 'ATK Up' },
-    defUp:      { label: 'DEF Up' },
-    atkDefUp:   { label: 'ATK & DEF Up' },
-    foeAtkDown: { label: 'Enemy ATK Down' },
-    foeDefDown: { label: 'Enemy DEF Down' }
-  };
-  var RARITY_ORDER = ['N', 'R', 'SR', 'SSR'];
+  // Skills. kind: 'boost' raises your cards, 'hit' lowers the enemy's.
+  // stat: 'atk', 'def' or 'both'. target: 'all', or a faction ('mortal', 'immortal', 'fallen').
+  // A boost aimed at one faction only helps your cards of that faction; a hit aimed at one
+  // faction only weakens enemies of that faction. Aimed skills are CONFIG.factionSkillMult
+  // times stronger, which rewards building around your alignment, as in the original.
+  // Each skill can trigger at the start of a battle (see CONFIG.skillChanceBySlot).
+  var SKILL_KINDS = { boost: 'Boost', hit: 'Hit' };
 
-  // [id, name, faction, rarity, art style, art look, skill name, skill type, skill target]
-  // Art styles: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
-  // Art looks (color scene only, no effect on play): fire, water, wind, light, dark
-  // Skill target: 'all' (every ally) or a faction ('mortal', 'immortal', 'fallen').
-  // Enemy-lowering skills always hit every enemy, so their target is 'all'.
+  // [id, name, faction, rarity, type, art style, art look, skill name, skill kind, skill stat, skill target]
+  // Art styles. Human: archer, knight, mage, warrior, lancer. Immortal adds a halo and wings
+  // to those, plus sprite (fairy), beast, seraph and serpent (celestial dragon). Fallen adds
+  // horns to those, plus sprite (imp), beast, tyrant and dragon (chaos dragon).
+  // Art looks (color scene only): fire, water, wind, light, dark.
   var CARD_LIST = [
-    ['dawn-acolyte',      'Dawn Acolyte',      'mortal',   'N',   'sprite', 'light', 'Morning Prayer', 'defUp', 'all'],
-    ['breeze-pixie',      'Breeze Pixie',      'mortal',   'N',   'sprite', 'wind', 'Tailwind', 'atkUp', 'mortal'],
-    ['cinder-archer',     'Cinder Archer',     'mortal',   'R',   'archer', 'fire', 'Piercing Volley', 'foeDefDown', 'all'],
-    ['reed-skirmisher',   'Reed Skirmisher',   'mortal',   'R',   'archer', 'wind', 'Ambush', 'atkUp', 'all'],
-    ['sunblade-paladin',  'Sunblade Paladin',  'mortal',   'R',   'knight', 'light', 'Shield Wall', 'defUp', 'mortal'],
-    ['storm-falconer',    'Storm Falconer',    'mortal',   'R',   'beast',  'wind', 'Harry', 'foeAtkDown', 'all'],
-    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'knight', 'fire', 'Warden\'s Oath', 'atkDefUp', 'mortal'],
-    ['tempest-leviathan', 'Tempest Leviathan', 'mortal',   'SSR', 'dragon', 'water', 'Maelstrom', 'foeDefDown', 'all'],
+    // ---- Mortal: humans only
+    ['militia-spearman',  'Militia Spearman',  'mortal',   'N',   'def', 'lancer',  'wind',  'Hold the Line',      'boost', 'def',  'all'],
+    ['village-archer',    'Village Archer',    'mortal',   'N',   'atk', 'archer',  'wind',  'Volley',             'hit',   'def',  'all'],
+    ['mercenary',         'Mercenary',         'mortal',   'HN',  'atk', 'warrior', 'fire',  'Paid in Blood',      'boost', 'atk',  'mortal'],
+    ['hedge-witch',       'Hedge Witch',       'mortal',   'HN',  'bal', 'mage',    'wind',  'Hex',                'hit',   'atk',  'all'],
+    ['captain',           'Captain',           'mortal',   'R',   'def', 'knight',  'light', 'Rally',              'boost', 'def',  'mortal'],
+    ['master-archer',     'Master Archer',     'mortal',   'R',   'atk', 'archer',  'fire',  'Piercing Shot',      'hit',   'def',  'all'],
+    ['alchemist',         'Alchemist',         'mortal',   'R',   'bal', 'mage',    'water', 'Elixir',             'boost', 'both', 'all'],
+    ['berserker',         'Berserker',         'mortal',   'HR',  'atk', 'warrior', 'fire',  'Frenzy',             'boost', 'atk',  'mortal'],
+    ['high-lancer',       'High Lancer',       'mortal',   'HR',  'def', 'lancer',  'light', 'Phalanx',            'boost', 'def',  'all'],
+    ['greatsword-maiden', 'Greatsword Maiden', 'mortal',   'HR',  'atk', 'knight',  'water', 'Demon\'s Bane',      'hit',   'def',  'fallen'],
+    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'bal', 'knight',  'fire',  'Warden\'s Oath',     'boost', 'both', 'mortal'],
+    ['grand-sorcerer',    'Grand Sorcerer',    'mortal',   'SR',  'atk', 'mage',    'light', 'Arcane Storm',       'hit',   'def',  'all'],
+    ['achilles',          'Achilles',          'mortal',   'SSR', 'atk', 'lancer',  'fire',  'Wrath of Achilles',  'boost', 'atk',  'mortal'],
+    ['siegfried',         'Siegfried',         'mortal',   'L',   'bal', 'warrior', 'light', 'Dragonslayer',       'boost', 'both', 'all'],
 
-    ['brook-sprite',      'Brook Sprite',      'immortal', 'N',   'sprite', 'water', 'Spring Blessing', 'defUp', 'all'],
-    ['lantern-cleric',    'Lantern Cleric',    'immortal', 'R',   'mage',   'light', 'Guiding Light', 'defUp', 'immortal'],
-    ['tide-caller',       'Tide Caller',       'immortal', 'R',   'mage',   'water', 'Undertow', 'foeAtkDown', 'all'],
-    ['frost-sentinel',    'Frost Sentinel',    'immortal', 'R',   'beast',  'water', 'Frostbite', 'foeDefDown', 'all'],
-    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'seraph', 'light', 'Sanctuary', 'atkDefUp', 'immortal'],
-    ['cyclone-dancer',    'Cyclone Dancer',    'immortal', 'SR',  'mage',   'wind', 'Gale Dance', 'atkUp', 'all'],
-    ['radiant-archon',    'Radiant Archon',    'immortal', 'SSR', 'seraph', 'light', 'Divine Decree', 'atkDefUp', 'immortal'],
-    ['skyfather-zephyr',  'Skyfather Zephyr',  'immortal', 'SSR', 'seraph', 'wind', 'Heaven\'s Wrath', 'atkUp', 'all'],
+    // ---- Immortal: gods, angels, fairies, celestial beasts and dragons
+    ['sylph',             'Sylph',             'immortal', 'N',   'atk', 'sprite',  'wind',  'Gust',               'boost', 'atk',  'immortal'],
+    ['dryad',             'Dryad',             'immortal', 'N',   'def', 'mage',    'wind',  'Bark Skin',          'boost', 'def',  'all'],
+    ['nymph',             'Nymph',             'immortal', 'HN',  'def', 'sprite',  'water', 'Spring Blessing',    'boost', 'def',  'immortal'],
+    ['shield-angel',      'Shield Angel',      'immortal', 'HN',  'def', 'knight',  'light', 'Aegis',              'boost', 'def',  'all'],
+    ['agni',              'Agni',              'immortal', 'R',   'atk', 'mage',    'fire',  'Sacred Flame',       'boost', 'atk',  'immortal'],
+    ['rhea',              'Rhea',              'immortal', 'R',   'def', 'mage',    'light', 'Mother\'s Ward',     'boost', 'def',  'immortal'],
+    ['valkyrie-lancer',   'Valkyrie Lancer',   'immortal', 'R',   'atk', 'lancer',  'light', 'Valiant Charge',     'hit',   'def',  'all'],
+    ['pegasus',           'Pegasus',           'immortal', 'HR',  'bal', 'beast',   'light', 'Skyward',            'boost', 'both', 'immortal'],
+    ['freyja',            'Freyja',            'immortal', 'HR',  'def', 'mage',    'water', 'Falcon Cloak',       'hit',   'atk',  'all'],
+    ['hermes',            'Hermes',            'immortal', 'HR',  'atk', 'archer',  'wind',  'Trickster',          'hit',   'atk',  'fallen'],
+    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'bal', 'seraph',  'light', 'Sanctuary',          'boost', 'both', 'immortal'],
+    ['xuanwu',            'Xuanwu',            'immortal', 'SR',  'def', 'beast',   'water', 'Black Tortoise Shell', 'boost', 'def', 'all'],
+    ['qinglong',          'Qinglong',          'immortal', 'SSR', 'atk', 'serpent', 'water', 'Azure Tempest',      'boost', 'atk',  'immortal'],
+    ['odin',              'Odin',              'immortal', 'L',   'bal', 'lancer',  'light', 'Gungnir',            'boost', 'both', 'all'],
 
-    ['ember-imp',         'Ember Imp',         'fallen',   'N',   'sprite', 'fire', 'Kindle', 'atkUp', 'fallen'],
-    ['shade-whelp',       'Shade Whelp',       'fallen',   'N',   'sprite', 'dark', 'Gloom', 'foeAtkDown', 'all'],
-    ['ashen-duelist',     'Ashen Duelist',     'fallen',   'R',   'knight', 'fire', 'Cinder Edge', 'atkUp', 'fallen'],
-    ['gloom-thief',       'Gloom Thief',       'fallen',   'R',   'archer', 'dark', 'Sap', 'foeDefDown', 'all'],
-    ['hollow-reaver',     'Hollow Reaver',     'fallen',   'R',   'knight', 'dark', 'Dread', 'foeAtkDown', 'all'],
-    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'mage',   'dark', 'Shadow Hex', 'atkDefUp', 'fallen'],
-    ['abyss-knight',      'Abyss Knight',      'fallen',   'SR',  'tyrant', 'water', 'Abyssal Guard', 'defUp', 'all'],
-    ['pyre-sovereign',    'Pyre Sovereign',    'fallen',   'SSR', 'dragon', 'fire', 'Hellfire', 'atkUp', 'fallen'],
-    ['void-tyrant',       'Void Tyrant',       'fallen',   'SSR', 'tyrant', 'dark', 'Oblivion', 'foeDefDown', 'all']
+    // ---- Fallen: demons, monsters, undead and chaos dragons
+    ['goblin',            'Goblin',            'fallen',   'N',   'atk', 'sprite',  'dark',  'Ambush',             'boost', 'atk',  'fallen'],
+    ['imp',               'Imp',               'fallen',   'N',   'bal', 'sprite',  'fire',  'Prank',              'hit',   'atk',  'all'],
+    ['ghoul-brute',       'Ghoul Brute',       'fallen',   'HN',  'atk', 'warrior', 'dark',  'Grave Hunger',       'hit',   'def',  'all'],
+    ['hellhound',         'Hellhound',         'fallen',   'HN',  'atk', 'beast',   'fire',  'Hunt',               'boost', 'atk',  'fallen'],
+    ['succubus',          'Succubus',          'fallen',   'R',   'def', 'mage',    'dark',  'Charm',              'hit',   'atk',  'all'],
+    ['gargoyle',          'Gargoyle',          'fallen',   'R',   'def', 'sprite',  'dark',  'Stoneskin',          'boost', 'def',  'fallen'],
+    ['wraith-knight',     'Wraith Knight',     'fallen',   'R',   'def', 'knight',  'dark',  'Dread',              'hit',   'atk',  'mortal'],
+    ['chimera',           'Chimera',           'fallen',   'HR',  'atk', 'beast',   'fire',  'Triple Maw',         'hit',   'def',  'all'],
+    ['vampire-countess',  'Vampire Countess',  'fallen',   'HR',  'def', 'mage',    'dark',  'Blood Pact',         'boost', 'def',  'fallen'],
+    ['minotaur',          'Minotaur',          'fallen',   'HR',  'atk', 'warrior', 'fire',  'Labyrinth Rage',     'boost', 'atk',  'all'],
+    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'bal', 'mage',    'dark',  'Shadow Hex',         'boost', 'both', 'fallen'],
+    ['medusa',            'Medusa',            'fallen',   'SR',  'atk', 'mage',    'water', 'Stone Gaze',         'hit',   'def',  'all'],
+    ['tiamat',            'Tiamat',            'fallen',   'SSR', 'atk', 'dragon',  'fire',  'Primordial Chaos',   'boost', 'atk',  'fallen'],
+    ['asmodeus',          'Asmodeus',          'fallen',   'L',   'bal', 'tyrant',  'dark',  'Infernal Crown',     'boost', 'both', 'all']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
     var r = RARITIES[c[3]];
     var f = FACTIONS[c[2]];
+    var t = CARD_TYPES[c[4]];
     return {
       id: c[0],
       name: c[1],
       faction: c[2],
       rarity: c[3],
-      style: c[4],
-      look: c[5],
-      skill: { name: c[6], type: c[7], target: c[8] },
-      atk: Math.round(r.atk * f.atkMod),
-      hp: Math.round(r.def * f.hpMod),   // "hp" in the code is the DEF shown on screen
+      type: c[4],
+      style: c[5],
+      look: c[6],
+      skill: { name: c[7], kind: c[8], stat: c[9], target: c[10] },
+      atk: Math.round(r.atk * f.atkMod * t.atk),
+      hp: Math.round(r.def * f.hpMod * t.def),   // "hp" in the code is the DEF shown on screen
       cost: r.cost + f.costMod
     };
   });
   var CARD_BY_ID = {};
   CARDS.forEach(function (c) { CARD_BY_ID[c.id] = c; });
 
+  // Cards from earlier versions of this game, and what they became. Saves are converted.
+  var CARD_RENAMES = {
+    'dawn-acolyte': 'village-archer', 'breeze-pixie': 'militia-spearman', 'cinder-archer': 'master-archer',
+    'reed-skirmisher': 'captain', 'sunblade-paladin': 'alchemist', 'storm-falconer': 'mercenary',
+    'tempest-leviathan': 'achilles', 'brook-sprite': 'sylph', 'lantern-cleric': 'rhea', 'tide-caller': 'agni',
+    'frost-sentinel': 'valkyrie-lancer', 'cyclone-dancer': 'xuanwu', 'radiant-archon': 'qinglong',
+    'skyfather-zephyr': 'qinglong', 'ember-imp': 'imp', 'shade-whelp': 'goblin', 'ashen-duelist': 'wraith-knight',
+    'gloom-thief': 'succubus', 'hollow-reaver': 'gargoyle', 'abyss-knight': 'medusa', 'pyre-sovereign': 'tiamat',
+    'void-tyrant': 'tiamat'
+  };
+
   // Quests. Each chapter has 5 sections. Sections 1-4: beat 3 monsters, then a treasure
   // chest opens. Section 5 is the chapter boss. Every enemy in a chapter is of that
   // chapter's faction (which changes their ATK/DEF the same way it does for cards).
+  // drops: as in the original, each section drops one card of each realm:
+  //   [Mortal card, Immortal card, Fallen card]. Defeated monsters sometimes drop one of them,
+  //   and the chest usually holds one. bossDrops: what the boss's chest can hold.
   // treasure: a 6-piece set. Sections 1-4 each drop "their" piece (pieces 1-4); the boss
   // drops pieces 5 and 6. Collect all 6 to claim a card of the set's reward rarity.
-  // dropWeights = chance weights for the card dropped from chests and boss battles.
   var CHAPTERS = [
     { id: 1, name: 'The Verdant Frontier', faction: 'mortal', look: 'wind',
-      enemies: [{ name: 'Thornback Boar', style: 'beast' }, { name: 'Moss Brigand', style: 'archer' },
-                { name: 'Wild Gale Hawk', style: 'beast' }, { name: 'Bramble Witch', style: 'mage' }],
-      boss: { name: 'Elder Treant', style: 'tyrant' },
+      enemies: [{ name: 'Road Bandit', style: 'warrior' }, { name: 'Brigand Archer', style: 'archer' },
+                { name: 'Renegade Knight', style: 'knight' }, { name: 'Bramble Witch', style: 'mage' }],
+      boss: { name: 'Bandit King', style: 'warrior' },
+      drops: [['village-archer', 'sylph', 'goblin'], ['militia-spearman', 'dryad', 'imp'],
+              ['mercenary', 'nymph', 'hellhound'], ['hedge-witch', 'shield-angel', 'ghoul-brute']],
+      bossDrops: ['captain', 'rhea', 'gargoyle'],
       treasure: { name: 'Relics of the Frontier', reward: 'SR',
-        pieces: ['Mossy Idol', 'Boar Tusk Charm', 'Hawk Feather Quill', 'Bramble Crown', 'Treant Heartwood', 'Verdant Seal'] },
-      dropWeights: { N: 70, R: 27, SR: 3, SSR: 0 } },
+        pieces: ['Mossy Idol', 'Bandit\'s Coin', 'Fletcher\'s Quill', 'Bramble Crown', 'Kingly Signet', 'Verdant Seal'] } },
     { id: 2, name: 'Cinder Peaks', faction: 'fallen', look: 'fire',
-      enemies: [{ name: 'Magma Crawler', style: 'beast' }, { name: 'Ash Raider', style: 'knight' },
-                { name: 'Smoldering Wisp', style: 'sprite' }, { name: 'Slag Golem', style: 'tyrant' }],
-      boss: { name: 'Caldera Drake', style: 'dragon' },
+      enemies: [{ name: 'Cave Goblin', style: 'sprite' }, { name: 'Lava Hound', style: 'beast' },
+                { name: 'Ash Ghoul', style: 'warrior' }, { name: 'Cinder Witch', style: 'mage' }],
+      boss: { name: 'Fafnir', style: 'dragon' },
+      drops: [['mercenary', 'nymph', 'ghoul-brute'], ['master-archer', 'agni', 'succubus'],
+              ['alchemist', 'valkyrie-lancer', 'wraith-knight'], ['captain', 'rhea', 'gargoyle']],
+      bossDrops: ['berserker', 'pegasus', 'chimera'],
       treasure: { name: 'Embers of the Peaks', reward: 'SR',
-        pieces: ['Magma Shard', 'Raider\'s Brand', 'Wisp Lantern', 'Golem Core', 'Drake Scale', 'Caldera Seal'] },
-      dropWeights: { N: 40, R: 45, SR: 14, SSR: 1 } },
-    { id: 3, name: 'The Hollow Sanctum', faction: 'immortal', look: 'dark',
-      enemies: [{ name: 'Grave Warden', style: 'knight' }, { name: 'Dusk Stalker', style: 'beast' },
-                { name: 'Hollow Priest', style: 'mage' }, { name: 'Wailing Shade', style: 'sprite' }],
-      boss: { name: 'The Pale Regent', style: 'seraph' },
+        pieces: ['Goblin Totem', 'Hound Collar', 'Ghoul\'s Lantern', 'Witch\'s Cauldron', 'Fafnir\'s Scale', 'Caldera Seal'] } },
+    { id: 3, name: 'The Sky Sanctum', faction: 'immortal', look: 'light',
+      enemies: [{ name: 'Temple Sylph', style: 'sprite' }, { name: 'Sanctum Guardian', style: 'knight' },
+                { name: 'Sacred Lion', style: 'beast' }, { name: 'Oracle', style: 'mage' }],
+      boss: { name: 'Seraph of Judgment', style: 'seraph' },
+      drops: [['master-archer', 'agni', 'succubus'], ['high-lancer', 'freyja', 'vampire-countess'],
+              ['greatsword-maiden', 'hermes', 'minotaur'], ['berserker', 'pegasus', 'chimera']],
+      bossDrops: ['grand-sorcerer', 'xuanwu', 'medusa'],
       treasure: { name: 'Regalia of the Sanctum', reward: 'SSR',
-        pieces: ['Grave Key', 'Stalker\'s Fang', 'Priest\'s Censer', 'Wailing Bell', 'Regent\'s Ring', 'Hollow Seal'] },
-      dropWeights: { N: 20, R: 45, SR: 30, SSR: 5 } }
+        pieces: ['Cloud Key', 'Guardian\'s Plume', 'Lion\'s Mane', 'Oracle\'s Eye', 'Judgment Scale', 'Sanctum Seal'] } }
   ];
   var STAGES_PER_CHAPTER = 5;
 
@@ -141,6 +195,7 @@ var GameData = (function () {
     startGold: 500,
     singlePullCost: 30,
     tenPullCost: 270,
+    tenPullGuarantee: 'HR',          // every x10 summon includes at least one card of this rarity or better
     staminaRegenMs: 60 * 1000,       // 1 stamina per minute
     maxDeckSize: 5,
     maxEvo: 2,
@@ -152,12 +207,12 @@ var GameData = (function () {
     damagePerAtk: 0.2,               // each hit deals ATK x 0.2 (+/-10%) to the target's DEF
     expPerStamina: 1,                // quests give exp equal to the stamina spent, like the original
     skillChanceBySlot: [1, 0.8, 0.6, 0.4, 0.2], // chance each party slot's skill triggers
-    factionSkillMult: 1.5,           // faction-only skills are 1.5x stronger
+    factionSkillMult: 1.5,           // skills aimed at one faction are 1.5x stronger
     treasureDropChance: 0.2,         // chance a section's monster drops that section's treasure piece
     bossTreasureChance: 0.5,         // chance a boss drops treasure piece 5 or 6
     monstersPerSection: 3,           // monsters to beat before the chest opens
-    monsterDropChance: 0.2,          // chance a defeated monster drops a card
-    chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
+    monsterDropChance: 0.2,          // chance a defeated monster drops one of the section's cards
+    chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold), as in the original
     leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and DEF
     alignmentBonus: 1.05,            // cards matching your alignment: +5% ATK and DEF
     sameFactionFuseMult: 1.5,        // fusing a card of the same faction gives 1.5x exp
@@ -175,7 +230,8 @@ var GameData = (function () {
   };
 
   var api = {
-    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER, SKILL_TYPES: SKILL_TYPES,
+    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER,
+    CARD_TYPES: CARD_TYPES, SKILL_KINDS: SKILL_KINDS, CARD_RENAMES: CARD_RENAMES,
     CARDS: CARDS, CARD_BY_ID: CARD_BY_ID, CHAPTERS: CHAPTERS,
     STAGES_PER_CHAPTER: STAGES_PER_CHAPTER, CONFIG: CONFIG
   };

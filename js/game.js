@@ -161,9 +161,12 @@ var Game = (function () {
 
     var rarities = [];
     for (var i = 0; i < count; i++) { rarities.push(rollWeighted(rateTable(), rand)); }
-    // A 10-summon always includes at least one Super Rare or better.
-    if (count === 10 && !rarities.some(function (r) { return r === 'SR' || r === 'SSR'; })) {
-      rarities[9] = rollWeighted({ SR: D.RARITIES.SR.rate, SSR: D.RARITIES.SSR.rate }, rand);
+    // A 10-summon always includes at least one card of CONFIG.tenPullGuarantee rarity or better.
+    var minIdx = D.RARITY_ORDER.indexOf(CFG.tenPullGuarantee);
+    if (count === 10 && !rarities.some(function (r) { return D.RARITY_ORDER.indexOf(r) >= minIdx; })) {
+      var high = {};
+      D.RARITY_ORDER.slice(minIdx).forEach(function (r) { high[r] = D.RARITIES[r].rate; });
+      rarities[9] = rollWeighted(high, rand);
     }
     var got = rarities.map(function (r) {
       var def = pickCardOfRarity(r, rand);
@@ -453,10 +456,15 @@ var Game = (function () {
     return levelsGained;
   }
 
-  function dropCard(state, stage, rand) {
+  // The cards a section can drop: one of each faction, as in the original.
+  function sectionDrops(stage) {
     var ch = D.CHAPTERS[stage.chapter - 1];
-    var def = pickCardOfRarity(rollWeighted(ch.dropWeights, rand), rand);
-    return addCard(state, def.id);
+    return stage.boss ? ch.bossDrops : ch.drops[stage.num - 1];
+  }
+
+  function dropCard(state, stage, rand) {
+    var ids = sectionDrops(stage);
+    return addCard(state, ids[Math.floor(rand() * ids.length)]);
   }
 
   // ---------- card skills ----------
@@ -464,22 +472,30 @@ var Game = (function () {
   function skillPct(def) {
     var pct = D.RARITIES[def.rarity].skill;
     if (def.skill.target !== 'all') { pct *= CFG.factionSkillMult; }
-    if (def.skill.type === 'atkDefUp') { pct *= 0.7; } // two stats, so each is a bit smaller
+    if (def.skill.stat === 'both') { pct *= 0.7; } // two stats, so each is a bit smaller
     return Math.round(pct);
   }
 
-  // Plain-English description, e.g. "+15% ATK to Fallen allies" or "Enemy DEF -10%".
+  // The skill described the way the original game worded it, e.g.
+  // "Great Boost to Fallen Attack/Defense" or "Medium Hit to Foes Defense (All)".
+  function skillTitle(def) {
+    var sk = def.skill;
+    var stat = sk.stat === 'atk' ? 'Attack' : (sk.stat === 'def' ? 'Defense' : 'Attack/Defense');
+    var tier = D.RARITIES[def.rarity].tier;
+    if (sk.kind === 'boost') {
+      return tier + ' Boost to ' + (sk.target === 'all' ? stat + ' (All)' : D.FACTIONS[sk.target].name + ' ' + stat);
+    }
+    return tier + ' Hit to Foes ' + (sk.target === 'all' ? stat + ' (All)' : D.FACTIONS[sk.target].name + ' ' + stat);
+  }
+
+  // Plain numbers, e.g. "+15% ATK to Fallen allies" or "-8% DEF to all enemies".
   function skillText(def) {
     var sk = def.skill, pct = skillPct(def);
-    var who = sk.target === 'all' ? 'all allies' : D.FACTIONS[sk.target].name + ' allies';
-    switch (sk.type) {
-      case 'atkUp': return '+' + pct + '% ATK to ' + who;
-      case 'defUp': return '+' + pct + '% DEF to ' + who;
-      case 'atkDefUp': return '+' + pct + '% ATK and DEF to ' + who;
-      case 'foeAtkDown': return 'Enemy ATK -' + pct + '%';
-      case 'foeDefDown': return 'Enemy DEF -' + pct + '%';
+    var stat = sk.stat === 'atk' ? 'ATK' : (sk.stat === 'def' ? 'DEF' : 'ATK and DEF');
+    if (sk.kind === 'boost') {
+      return '+' + pct + '% ' + stat + ' to ' + (sk.target === 'all' ? 'all allies' : D.FACTIONS[sk.target].name + ' allies');
     }
-    return '';
+    return '-' + pct + '% ' + stat + ' to ' + (sk.target === 'all' ? 'all enemies' : D.FACTIONS[sk.target].name + ' enemies');
   }
 
   // At the start of a battle each party card rolls to trigger its skill: the first slot
@@ -492,19 +508,14 @@ var Game = (function () {
       var roll = rand();
       if (roll >= (CFG.skillChanceBySlot[i] || 0)) { return; }
       var sk = def.skill, f = skillPct(def) / 100;
-      var allies = team.filter(function (a) { return sk.target === 'all' || a.faction === sk.target; });
-      function boost(list, atk, hp) {
-        list.forEach(function (x) {
-          if (atk) { x.atk = Math.round(x.atk * atk); }
-          if (hp) { x.hp = Math.round(x.hp * hp); x.maxHp = Math.round(x.maxHp * hp); }
-        });
-      }
-      if (sk.type === 'atkUp') { boost(allies, 1 + f, 0); }
-      else if (sk.type === 'defUp') { boost(allies, 0, 1 + f); }
-      else if (sk.type === 'atkDefUp') { boost(allies, 1 + f, 1 + f); }
-      else if (sk.type === 'foeAtkDown') { boost(enemies, 1 - f, 0); }
-      else if (sk.type === 'foeDefDown') { boost(enemies, 0, 1 - f); }
-      events.push({ t: 'skill', side: 'p', from: i, name: sk.name, text: skillText(def) });
+      var pool = sk.kind === 'boost' ? team : enemies;
+      var targets = pool.filter(function (a) { return sk.target === 'all' || a.faction === sk.target; });
+      var mult = sk.kind === 'boost' ? 1 + f : 1 - f;
+      targets.forEach(function (x) {
+        if (sk.stat !== 'def') { x.atk = Math.round(x.atk * mult); }
+        if (sk.stat !== 'atk') { x.hp = Math.round(x.hp * mult); x.maxHp = Math.round(x.maxHp * mult); }
+      });
+      events.push({ t: 'skill', side: 'p', from: i, name: sk.name, title: skillTitle(def), text: skillText(def), affected: targets.length });
     });
     return events;
   }
@@ -639,6 +650,8 @@ var Game = (function () {
     var out = {};
     for (var k in base) { out[k] = (s[k] !== undefined) ? s[k] : base[k]; }
     // Drop cards the game no longer knows about.
+    // Cards from earlier versions of the game become their replacements.
+    out.cards.forEach(function (c) { if (c && D.CARD_RENAMES[c.cardId]) { c.cardId = D.CARD_RENAMES[c.cardId]; } });
     out.cards = out.cards.filter(function (c) {
       return c && D.CARD_BY_ID[c.cardId] && typeof c.uid === 'number';
     });
@@ -679,7 +692,7 @@ var Game = (function () {
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
     spendPoint: spendPoint, useAmbrosia: useAmbrosia, setAlignment: setAlignment,
-    skillPct: skillPct, skillText: skillText, applySkills: applySkills,
+    skillPct: skillPct, skillText: skillText, skillTitle: skillTitle, applySkills: applySkills, sectionDrops: sectionDrops,
     treasureCounts: treasureCounts, treasureComplete: treasureComplete, claimTreasure: claimTreasure, stagePieces: stagePieces,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
