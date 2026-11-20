@@ -11,6 +11,10 @@ Everything runs on your own computer. There is no server, no account and nothing
 2. Open the file **`index.html`** in your browser (double-click it).
 3. That's it. Your progress saves automatically in that browser.
 
+**On a phone?** Some phone file previewers open `index.html` on its own and show a blank, unstyled page,
+because they can't load the other files next to it. Open **`play.html`** instead: it is the whole game
+packed into one file. (If you change the code, run `node build.js` to rebuild it.)
+
 > Use the same browser each time. Saves live inside the browser, so a different browser (or clearing
 > site data) starts a new game. Use **More > Show my save** to back your game up.
 
@@ -55,6 +59,8 @@ Most tweaks are one-line edits in **`js/data.js`**:
 
 ```
 index.html        the page
+play.html         the whole game packed into one file (made by build.js)
+build.js          rebuilds play.html:  node build.js
 style.css         how it looks
 js/data.js        cards, rarities, chapters, balance settings
 js/game.js        the rules (summoning, fusion, battles, saving). No screen code.

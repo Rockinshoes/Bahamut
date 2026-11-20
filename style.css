@@ -13,9 +13,11 @@
   --r-SSR: #f0b429;
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+:root { color-scheme: dark; }
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
   font: 15px/1.4 -apple-system, "Segoe UI", Roboto, sans-serif; }
-body { display: flex; flex-direction: column; max-width: 640px; margin: 0 auto; }
+body { display: flex; flex-direction: column; max-width: 640px; margin: 0 auto;
+  padding-left: max(4px, env(safe-area-inset-left, 0px)); padding-right: max(4px, env(safe-area-inset-right, 0px)); }
 
 #topbar { display: flex; gap: 10px; padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
   background: var(--panel); align-items: center; justify-content: space-between; flex-wrap: wrap; }
