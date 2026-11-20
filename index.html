@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Bahamut Clone</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="topbar">
+    <div class="stat"><span class="label">Lv</span> <b id="s-level">1</b></div>
+    <div class="stat stamina">
+      <span class="label">Stamina</span> <b id="s-stamina">0/0</b>
+      <div class="bar"><div id="s-stamina-bar"></div></div>
+      <small id="s-stamina-timer"></small>
+    </div>
+    <div class="stat"><span class="label">Gems</span> <b id="s-gems">0</b></div>
+    <div class="stat"><span class="label">Gold</span> <b id="s-gold">0</b></div>
+  </header>
+
+  <main id="view"></main>
+
+  <nav id="tabs">
+    <button data-tab="quests" class="active">Quests</button>
+    <button data-tab="cards">Cards</button>
+    <button data-tab="deck">Deck</button>
+    <button data-tab="summon">Summon</button>
+    <button data-tab="more">More</button>
+  </nav>
+
+  <div id="modal-backdrop" hidden>
+    <div id="modal" role="dialog" aria-modal="true"></div>
+  </div>
+  <div id="toast" hidden></div>
+
+  <script src="js/data.js"></script>
+  <script src="js/game.js"></script>
+  <script src="js/ui.js"></script>
+</body>
+</html>

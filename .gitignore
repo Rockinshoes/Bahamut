@@ -1,0 +1,8 @@
+# Card art stays on your own computer and is never uploaded.
+# (assets/cards/.gitkeep keeps the empty folder in the repo.)
+assets/cards/*
+!assets/cards/.gitkeep
+
+# Misc
+node_modules/
+.DS_Store
