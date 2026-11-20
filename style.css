@@ -196,3 +196,13 @@ table.rates td { padding: 2px 12px 2px 0; }
 .fx { font-weight: 700; }
 .align-pick { display: flex; gap: 12px; align-items: center; }
 .align-art { width: 84px; flex: none; }
+
+/* Skills and treasure */
+.skill-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--panel2); font-size: 13px; }
+.skill-row:last-child { border-bottom: 0; }
+.skill-row .pct { width: 40px; flex: none; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.bu.skill .bu-card { box-shadow: 0 0 0 3px var(--accent), 0 0 18px var(--accent); transform: translateY(-6px) scale(1.06); }
+.treasure { padding: 8px 12px; }
+.tr { color: #4a4f66; }
+.treasure .tr { margin-right: 3px; font-size: 15px; }
+.tr.have { color: var(--accent); }

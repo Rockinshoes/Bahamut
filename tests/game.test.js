@@ -237,7 +237,7 @@ test('there is no damage weakness: a hit only depends on the attacker\'s ATK', f
   var b = [{ name: 'B', faction: 'mortal', atk: 1, hp: 1000, maxHp: 1000 }];
   var r = G.simulateBattle(a, b, function () { return 0.5; });
   var hit = r.events.filter(function (e) { return e.t === 'hit' && e.side === 'p'; })[0];
-  assert.strictEqual(hit.dmg, 100);
+  assert.strictEqual(hit.dmg, Math.round(100 * D.CONFIG.damagePerAtk));
 });
 test('cards matching your alignment get +15% ATK and HP; others do not', function () {
   var s = G.newGame({ now: 0, alignment: 'fallen' });
@@ -272,7 +272,8 @@ test('a battle is recorded as replayable events that match the final result', fu
   var ev = r.events;
   assert.strictEqual(ev[ev.length - 1].t, 'end');
   assert.strictEqual(ev[ev.length - 1].win, r.win);
-  assert.strictEqual(ev[0].t, 'round');
+  var firstNonSkill = ev.filter(function (e) { return e.t !== 'skill'; })[0];
+  assert.strictEqual(firstNonSkill.t, 'round', 'skills come first, then round 1');
   var hits = ev.filter(function (e) { return e.t === 'hit'; });
   assert(hits.length > 0);
   // Replaying health from the events: every enemy ends at 0, and no hit targets a dead unit.
@@ -327,25 +328,100 @@ test('a loss costs no stamina, gives no rewards and does not move progress', fun
   assert.strictEqual(s.stamina, stamina); assert.strictEqual(s.gold, gold); assert.strictEqual(s.cards.length, cards);
   assert(!s.progress['1-5']);
 });
-test('beating a boss gives a card, Cure Water and big first-clear gems', function () {
+test('beating a boss gives a card, Ambrosia and big first-clear gems', function () {
   var s = strongState();
   ['1-1', '1-2', '1-3', '1-4'].forEach(function (id) { s.cleared[id] = true; });
   var gems = s.gems, cards = s.cards.length;
   var r = G.fight(s, '1-5', { rand: seeded(8), now: 0 });
   assert(r.ok && r.win);
-  assert(r.rewards.chest && r.rewards.cureWater === 1 && s.items.cureWater === 1);
+  assert(r.rewards.chest && r.rewards.ambrosia === 1 && s.items.ambrosia === 1);
   assert(s.cards.length > cards, 'boss should drop a card');
   assert.strictEqual(s.gems, gems + D.CONFIG.firstClearBossGems);
   assert(G.isUnlocked(s, '2-1'));
 });
-test('Cure Water refills stamina, and only when you have some and are not full', function () {
+test('Ambrosia refills stamina, and only when you have some and are not full', function () {
   var s = G.newGame({ now: 0 });
-  assert(!G.useCureWater(s).ok, 'none owned');
-  s.items.cureWater = 1;
-  assert(!G.useCureWater(s).ok, 'stamina already full');
+  assert(!G.useAmbrosia(s).ok, 'none owned');
+  s.items.ambrosia = 1;
+  assert(!G.useAmbrosia(s).ok, 'stamina already full');
   s.stamina = 2;
-  assert(G.useCureWater(s).ok);
-  assert.strictEqual(s.stamina, G.staminaCap(s)); assert.strictEqual(s.items.cureWater, 0);
+  assert(G.useAmbrosia(s).ok);
+  assert.strictEqual(s.stamina, G.staminaCap(s)); assert.strictEqual(s.items.ambrosia, 0);
+});
+test('quests give 1 exp per stamina spent', function () {
+  var s = strongState();
+  ['1-1', '1-2', '1-3', '1-4', '1-5'].forEach(function (id) { s.cleared[id] = true; });
+  var r = G.fight(s, '2-1', { rand: seeded(3), now: 0 });
+  assert(r.win);
+  assert.strictEqual(r.rewards.exp, G.getStage('2-1').staminaCost * D.CONFIG.expPerStamina);
+  assert.strictEqual(D.CONFIG.expPerStamina, 1);
+});
+
+console.log('Card skills');
+test('every card has a skill with a known type and a readable description', function () {
+  D.CARDS.forEach(function (c) {
+    assert(D.SKILL_TYPES[c.skill.type], c.id + ' has unknown skill type ' + c.skill.type);
+    assert(c.skill.target === 'all' || D.FACTIONS[c.skill.target], c.id + ' has a bad skill target');
+    assert(G.skillPct(c) > 0 && G.skillText(c).length > 5);
+  });
+});
+test('the slot 1 skill always triggers; slots further back trigger less often', function () {
+  var counts = [0, 0, 0, 0, 0], n = 3000, rand = seeded(77);
+  var s = G.newGame({ now: 0, alignment: 'mortal' });
+  s.cards = []; s.deck = [];
+  ['reed-skirmisher', 'reed-skirmisher', 'reed-skirmisher', 'reed-skirmisher', 'reed-skirmisher'].forEach(function (id) { s.deck.push(G.addCard(s, id).uid); });
+  for (var i = 0; i < n; i++) {
+    var team = G.buildTeam(s, s.deck), foes = G.stageEnemies(G.getStage('1-1'), 1);
+    G.applySkills(team, foes, rand).forEach(function (e) { counts[e.from]++; });
+  }
+  assert.strictEqual(counts[0], n, 'slot 1 must always trigger');
+  D.CONFIG.skillChanceBySlot.forEach(function (p, i) {
+    assert(Math.abs(counts[i] / n - p) < 0.04, 'slot ' + (i + 1) + ' triggered ' + (counts[i] / n).toFixed(2));
+  });
+});
+test('skills change stats: ATK Up for a faction, enemy DEF Down for all foes', function () {
+  var s = G.newGame({ now: 0, alignment: 'fallen' });
+  s.cards = []; s.deck = [];
+  var ember = G.addCard(s, 'ember-imp'), mortal = G.addCard(s, 'dawn-acolyte');
+  var team = G.buildTeam(s, [ember.uid, mortal.uid]);            // Kindle: +ATK to Fallen allies
+  var before = team.map(function (u) { return u.atk; });
+  var foes = G.stageEnemies(G.getStage('1-1'), 1);
+  G.applySkills(team, foes, function () { return 0.99; });        // only slot 1 (100%) triggers
+  var pct = G.skillPct(D.CARD_BY_ID['ember-imp']) / 100;
+  assert.strictEqual(team[0].atk, Math.round(before[0] * (1 + pct)), 'Fallen ally gets the boost');
+  assert.strictEqual(team[1].atk, before[1], 'Mortal ally does not');
+  var sap = G.newGame({ now: 0 }); sap.cards = []; sap.deck = [];
+  var thief = G.addCard(sap, 'gloom-thief');
+  var foes2 = G.stageEnemies(G.getStage('1-1'), 1), def0 = foes2[0].maxHp;
+  G.applySkills(G.buildTeam(sap, [thief.uid]), foes2, function () { return 0.5; });
+  assert.strictEqual(foes2[0].maxHp, Math.round(def0 * (1 - G.skillPct(D.CARD_BY_ID['gloom-thief']) / 100)));
+});
+test('faction-only skills are stronger than skills for all allies', function () {
+  assert(G.skillPct(D.CARD_BY_ID['ashen-duelist']) > G.skillPct(D.CARD_BY_ID['reed-skirmisher'])); // both R atkUp
+});
+
+console.log('Treasure');
+test('a section drops its own treasure piece; the boss drops piece 5 or 6', function () {
+  var s = strongState();
+  var r = G.fight(s, '1-1', { rand: function () { return 0.01; }, now: 0 }); // every roll succeeds
+  assert(r.win && r.rewards.treasure);
+  assert.strictEqual(r.rewards.treasure.piece, 0);
+  assert.strictEqual(r.rewards.treasure.name, D.CHAPTERS[0].treasure.pieces[0]);
+  assert.deepStrictEqual(G.stagePieces(G.getStage('1-3')), [2]);
+  assert.deepStrictEqual(G.stagePieces(G.getStage('1-5')), [4, 5]);
+});
+test('a full set can be claimed for a card of the set\'s reward rarity, once per set', function () {
+  var s = G.newGame({ now: 0 });
+  assert(!G.claimTreasure(s, 1).ok, 'not complete yet');
+  s.treasure['1'] = [1, 1, 1, 1, 1, 2];
+  assert(G.treasureComplete(s, 1));
+  var cards = s.cards.length;
+  var r = G.claimTreasure(s, 1, seeded(4));
+  assert(r.ok && D.CARD_BY_ID[r.card.cardId].rarity === D.CHAPTERS[0].treasure.reward);
+  assert.strictEqual(s.cards.length, cards + 1);
+  assert.deepStrictEqual(s.treasure['1'], [0, 0, 0, 0, 0, 1]);
+  assert(!G.claimTreasure(s, 1).ok, 'set used up');
+  assert.strictEqual(D.CHAPTERS[2].treasure.reward, 'SSR');
 });
 test('you can choose the party for a battle; bad parties are refused and change nothing', function () {
   var s = G.newGame({ now: 0 });
@@ -423,12 +499,13 @@ test('save and load round-trips, and bad saves are rejected', function () {
   var s = G.newGame({ now: 0 });
   G.summon(s, 10, seeded(9));
   G.fight(s, '1-1', { rand: seeded(2), now: 0 });
-  s.attr.atk = 2; s.items.cureWater = 3; s.alignment = 'immortal';
+  s.attr.atk = 2; s.items.ambrosia = 3; s.alignment = 'immortal'; s.treasure['2'] = [1, 0, 2, 0, 0, 0];
   var back = G.deserialize(G.serialize(s));
   assert.deepStrictEqual(back.cards, s.cards);
   assert.deepStrictEqual(back.progress, s.progress);
   assert.deepStrictEqual(back.attr, s.attr);
-  assert.strictEqual(back.items.cureWater, 3);
+  assert.strictEqual(back.items.ambrosia, 3);
+  assert.deepStrictEqual(back.treasure['2'], [1, 0, 2, 0, 0, 0]);
   assert.strictEqual(back.alignment, 'immortal');
   var odd = JSON.parse(G.serialize(s)); odd.alignment = 'dragon';
   assert.strictEqual(G.deserialize(JSON.stringify(odd)).alignment, null, 'unknown alignment is cleared so the game asks again');
@@ -444,7 +521,8 @@ test('saves from the first version (no progress/attributes/items) still load', f
   var back = G.deserialize(JSON.stringify(old));
   assert(back);
   assert.deepStrictEqual(back.attr, { stamina: 0, atk: 0 });
-  assert.strictEqual(back.items.cureWater, 0);
+  assert.strictEqual(back.items.ambrosia, 0);
+  assert.deepStrictEqual(back.treasure, {});
   assert.strictEqual(back.attrPoints, 0);
   assert(back.cleared['1-1']);
   assert.strictEqual(back.alignment, null, 'old saves have no alignment yet; the game asks for one');
@@ -457,6 +535,12 @@ test('points that an older save spent on the removed DEF PWR are given back', fu
   var back = G.deserialize(JSON.stringify(old));
   assert.deepStrictEqual(back.attr, { stamina: 1, atk: 2 });
   assert.strictEqual(back.attrPoints, 4);
+});
+test('Cure Water in an older save becomes Ambrosia', function () {
+  var old = JSON.parse(G.serialize(G.newGame({ now: 0 })));
+  old.items = { cureWater: 2 };
+  var back = G.deserialize(JSON.stringify(old));
+  assert.deepStrictEqual(back.items, { ambrosia: 2 });
 });
 test('loading drops unknown cards and keeps new uids unique', function () {
   var s = G.newGame({ now: 0 });

@@ -25,27 +25,42 @@ Every card belongs to one of three factions. There is **no damage weakness** bet
 | Faction | Leaning |
 | --- | --- |
 | **Mortal** | Balanced stats. Each card costs 1 less in your party. |
-| **Immortal** | The toughest cards: high HP, lower ATK. |
-| **Fallen** | The hardest hitters: high ATK, lower HP. |
+| **Immortal** | The toughest cards: high DEF, lower ATK. |
+| **Fallen** | The hardest hitters: high ATK, lower DEF. |
 
 When you start a game you pick an **alignment** and get its starter pack: **one champion** of that faction
 (Mortal: Flame Warden, Immortal: Halo Seraph, Fallen: Night Sorceress). You do not start with a full party;
-you build it from cards you win in quests and summons. Cards of your alignment get **+5% ATK and HP** in battle.
+you build it from cards you win in quests and summons. Cards of your alignment get **+5% ATK and DEF** in battle.
 You can still use any card. (More > Change alignment switches it later.)
 
 ## How a quest works
 
 1. **Quests tab > Enter.** Each chapter has 5 sections. Sections 1 to 4 are monsters, section 5 is the boss.
-2. **Pick your party.** Before every battle you choose up to 5 cards. The first card is the **leader** (+20% ATK and HP).
+2. **Pick your party.** Before every battle you choose up to 5 cards. The first card is the **leader** (+20% ATK and DEF).
    The screen shows the enemies and their faction, and a green arrow marks your cards that match your alignment.
    Your party's total card cost can't go over your **ATK PWR** (see below).
-3. **Watch the battle.** Both sides attack in rounds. Use 1x / 2x / 4x speed, or **Skip** to jump to the result.
-4. **Collect rewards.** Every win costs stamina and gives exp and gold, and monsters sometimes drop a card.
-   After **3 monsters** a **treasure chest** opens (gold and a likely card) and the section is cleared.
-   The **boss** always drops a card and a **Cure Water** (refills all your stamina).
+3. **Watch the battle.** First your cards' **skills** may trigger, then both sides attack in rounds. Each hit takes
+   ATK x 0.2 off the target's DEF; a card at 0 DEF is knocked out. Use 1x / 2x / 4x speed, or **Skip**.
+4. **Collect rewards.** Every win costs stamina and gives **1 exp per stamina** (like the original) and gold, and
+   monsters sometimes drop a card or a **treasure piece**. After **3 monsters** a **treasure chest** opens (gold and a
+   likely card) and the section is cleared. The **boss** always drops a card and an **Ambrosia** (refills all your stamina).
 5. **A lost battle costs nothing.** Change your party, level up your cards, and try again.
 
 Cleared sections can be replayed to farm cards and gold. First clears also give gems.
+
+### Card skills
+Every card has a skill that can trigger at the start of a battle and lasts the whole fight: ATK Up, DEF Up,
+ATK & DEF Up, Enemy ATK Down or Enemy DEF Down. Strength grows with rarity (5% for N up to 20% for SSR).
+Some skills only help one faction but are 1.5x stronger, which rewards building around your alignment.
+
+Whether a skill triggers depends on the card's **party slot**: slot 1 always, then 80%, 60%, 40% and 20%.
+(The 100/80/60% figures come from players of the original; 40% and 20% are filled in.) The party screen lists
+your party's skills and their chances.
+
+### Treasure sets
+Each chapter has a 6-piece treasure set. Sections 1-4 each drop one piece (20% per monster win) and the boss
+drops pieces 5 and 6 (50% per boss win). With all six, tap **Claim** on the Quests tab to trade the set for a
+card: Super Rare for chapters 1-2, Legendary for chapter 3. Sets can be collected again.
 
 ### Levelling up and attribute points
 You get **3 attribute points** per level-up and **1** the first time you clear each section. Spend them on:
@@ -89,6 +104,8 @@ Most tweaks are one-line edits in **`js/data.js`**:
 - Add a card: add a line to `CARD_LIST`, like `['my-card', 'My Card', 'fallen', 'SR', 'knight', 'fire']`.
   The faction is `mortal`, `immortal` or `fallen`. The last two values only pick the placeholder drawing:
   a style (`sprite`, `archer`, `knight`, `mage`, `beast`, `dragon`, `seraph`, `tyrant`) and a color scene (`fire`, `water`, `wind`, `light`, `dark`).
+- Change a card's skill: the last three values of its line in `CARD_LIST`. Skill strengths: `RARITIES`.
+  Trigger chances, treasure drop rates and exp per stamina: `CONFIG`. Treasure sets: `CHAPTERS`.
 - Change how each faction leans: `FACTIONS`. The alignment bonus, starting ATK PWR, starting gems and starter packs: `CONFIG`.
 - Change summon rates, stamina speed, monsters per section, chest odds, leader bonus, attribute points and starter cards: `RARITIES` and `CONFIG`.
 - Rename chapters, monsters and bosses: `CHAPTERS`.

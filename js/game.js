@@ -37,7 +37,9 @@ var Game = (function () {
   // ---------- player progression ----------
   function maxStamina(level, bonus) { return Math.min(100, 20 + 2 * (level - 1) + (bonus || 0)); }
   function staminaCap(state) { return maxStamina(state.level, state.attr.stamina * CFG.staminaPerPoint); }
-  function expToNext(level) { return 60 * level; }
+  // Quests give 1 exp per stamina (CONFIG.expPerStamina), so early levels take about
+  // one bar of stamina, as in the original.
+  function expToNext(level) { return 12 * level; }
   // ATK PWR: the most total card cost your party can have.
   function deckCostCap(state) { return CFG.baseAtkPower + state.attr.atk * CFG.atkPowerPerPoint; }
 
@@ -82,7 +84,8 @@ var Game = (function () {
       progress: {},         // section id -> total monsters beaten there
       attr: { stamina: 0, atk: 0 },
       attrPoints: 0,
-      items: { cureWater: 0 },
+      items: { ambrosia: 0 },
+      treasure: {},          // chapter id -> [count of piece 1, ..., count of piece 6]
       pulls: 0
     };
     (CFG.starterCards[state.alignment] || CFG.starterCards.mortal).forEach(function (id) {
@@ -127,10 +130,11 @@ var Game = (function () {
     return { ok: true };
   }
 
-  function useCureWater(state) {
-    if (state.items.cureWater < 1) { return { ok: false, error: 'You have no Cure Water.' }; }
+  // Ambrosia refills all your stamina. Bosses drop it.
+  function useAmbrosia(state) {
+    if (state.items.ambrosia < 1) { return { ok: false, error: 'You have no Ambrosia.' }; }
     if (state.stamina >= staminaCap(state)) { return { ok: false, error: 'Your stamina is already full.' }; }
-    state.items.cureWater--;
+    state.items.ambrosia--;
     state.stamina = staminaCap(state);
     return { ok: true };
   }
@@ -376,7 +380,7 @@ var Game = (function () {
         boss: isBoss,
         faction: ch.faction,
         hp: hp, maxHp: hp,
-        atk: Math.round(14 * power * (isBoss ? 1.5 : 1) * f.atkMod)
+        atk: Math.round(70 * power * (isBoss ? 1.5 : 1) * f.atkMod)
       });
     }
     return list;
@@ -411,7 +415,7 @@ var Game = (function () {
     function alive(side) { return side.filter(function (u) { return u.hp > 0; }); }
     function act(unit, side, mySide, targets, theirSide) {
       var tgt = targets[Math.floor(rand() * targets.length)];
-      var dmg = Math.max(1, Math.round(unit.atk * (0.9 + 0.2 * rand())));
+      var dmg = Math.max(1, Math.round(unit.atk * CFG.damagePerAtk * (0.9 + 0.2 * rand())));
       tgt.hp = Math.max(0, tgt.hp - dmg);
       events.push({ t: 'hit', side: side, from: mySide.indexOf(unit), to: theirSide.indexOf(tgt), dmg: dmg, hp: tgt.hp, dead: tgt.hp === 0 });
       log.push(unit.name + ' hits ' + tgt.name + ' for ' + dmg + (tgt.hp === 0 ? ' - defeated' : ''));
@@ -455,6 +459,79 @@ var Game = (function () {
     return addCard(state, def.id);
   }
 
+  // ---------- card skills ----------
+  // Strength in percent of a card's skill.
+  function skillPct(def) {
+    var pct = D.RARITIES[def.rarity].skill;
+    if (def.skill.target !== 'all') { pct *= CFG.factionSkillMult; }
+    if (def.skill.type === 'atkDefUp') { pct *= 0.7; } // two stats, so each is a bit smaller
+    return Math.round(pct);
+  }
+
+  // Plain-English description, e.g. "+15% ATK to Fallen allies" or "Enemy DEF -10%".
+  function skillText(def) {
+    var sk = def.skill, pct = skillPct(def);
+    var who = sk.target === 'all' ? 'all allies' : D.FACTIONS[sk.target].name + ' allies';
+    switch (sk.type) {
+      case 'atkUp': return '+' + pct + '% ATK to ' + who;
+      case 'defUp': return '+' + pct + '% DEF to ' + who;
+      case 'atkDefUp': return '+' + pct + '% ATK and DEF to ' + who;
+      case 'foeAtkDown': return 'Enemy ATK -' + pct + '%';
+      case 'foeDefDown': return 'Enemy DEF -' + pct + '%';
+    }
+    return '';
+  }
+
+  // At the start of a battle each party card rolls to trigger its skill: the first slot
+  // always does, later slots less often. Triggered skills change the units' stats for the
+  // whole battle. Returns the skill events for the battle screen to show.
+  function applySkills(team, enemies, rand) {
+    var events = [];
+    team.forEach(function (u, i) {
+      var def = D.CARD_BY_ID[u.cardId];
+      var roll = rand();
+      if (roll >= (CFG.skillChanceBySlot[i] || 0)) { return; }
+      var sk = def.skill, f = skillPct(def) / 100;
+      var allies = team.filter(function (a) { return sk.target === 'all' || a.faction === sk.target; });
+      function boost(list, atk, hp) {
+        list.forEach(function (x) {
+          if (atk) { x.atk = Math.round(x.atk * atk); }
+          if (hp) { x.hp = Math.round(x.hp * hp); x.maxHp = Math.round(x.maxHp * hp); }
+        });
+      }
+      if (sk.type === 'atkUp') { boost(allies, 1 + f, 0); }
+      else if (sk.type === 'defUp') { boost(allies, 0, 1 + f); }
+      else if (sk.type === 'atkDefUp') { boost(allies, 1 + f, 1 + f); }
+      else if (sk.type === 'foeAtkDown') { boost(enemies, 1 - f, 0); }
+      else if (sk.type === 'foeDefDown') { boost(enemies, 0, 1 - f); }
+      events.push({ t: 'skill', side: 'p', from: i, name: sk.name, text: skillText(def) });
+    });
+    return events;
+  }
+
+  // ---------- treasure ----------
+  function treasureCounts(state, chapterId) {
+    var t = state.treasure[chapterId];
+    if (!t) { t = state.treasure[chapterId] = [0, 0, 0, 0, 0, 0]; }
+    return t;
+  }
+  // Which piece (0-5) a section drops: sections 1-4 drop pieces 1-4; the boss drops 5 or 6.
+  function stagePieces(stage) { return stage.boss ? [4, 5] : [stage.num - 1]; }
+  function treasureComplete(state, chapterId) {
+    return treasureCounts(state, chapterId).every(function (n) { return n > 0; });
+  }
+  // Trade one of each of the 6 pieces for a card of the set's reward rarity.
+  function claimTreasure(state, chapterId, rand) {
+    rand = rand || Math.random;
+    var ch = D.CHAPTERS[chapterId - 1];
+    if (!ch) { return { ok: false, error: 'Unknown treasure set.' }; }
+    if (!treasureComplete(state, chapterId)) { return { ok: false, error: 'You need all 6 pieces first.' }; }
+    var t = treasureCounts(state, chapterId);
+    for (var i = 0; i < 6; i++) { t[i]--; }
+    var def = pickCardOfRarity(ch.treasure.reward, rand);
+    return { ok: true, card: addCard(state, def.id) };
+  }
+
   // What the party-select screen needs to know about the next battle in a section.
   function battleInfo(state, stageId) {
     var stage = getStage(stageId);
@@ -482,10 +559,11 @@ var Game = (function () {
 
     var team = buildTeam(state, state.deck);
     var enemies = info.enemies;
-    var units = { player: snapshot(team), enemy: snapshot(enemies) };
+    var skillEvents = applySkills(team, enemies, rand);
+    var units = { player: snapshot(team), enemy: snapshot(enemies) }; // stats after skills
     var sim = simulateBattle(team, enemies, rand);
     var out = {
-      ok: true, win: sim.win, rounds: sim.rounds, log: sim.log, events: sim.events,
+      ok: true, win: sim.win, rounds: sim.rounds, log: sim.log, events: skillEvents.concat(sim.events),
       units: units, stage: stage, fightNo: info.fightNo, monsters: info.monsters
     };
     if (!sim.win) { return out; } // a loss costs nothing
@@ -496,9 +574,9 @@ var Game = (function () {
 
     var gi = stage.index;
     var rewards = {
-      exp: stage.staminaCost * 5,
+      exp: stage.staminaCost * CFG.expPerStamina,
       gold: stage.boss ? 150 + 60 * gi : 12 + 6 * gi,
-      gems: 0, cards: [], chest: false, chestGold: 0, cureWater: 0,
+      gems: 0, cards: [], chest: false, chestGold: 0, ambrosia: 0, treasure: null,
       levelsGained: 0, firstClear: false, sectionCleared: false, points: 0
     };
 
@@ -514,12 +592,23 @@ var Game = (function () {
       rewards.chest = true;
       if (stage.boss) {
         rewards.cards.push(dropCard(state, stage, rand));
-        rewards.cureWater = 1;
+        rewards.ambrosia = 1;
       } else {
         rewards.chestGold = 40 + 20 * gi;
         if (rand() < CFG.chestCardChance) { rewards.cards.push(dropCard(state, stage, rand)); }
       }
     }
+    // Treasure: each monster win has a chance to drop this section's piece.
+    if (rand() < (stage.boss ? CFG.bossTreasureChance : CFG.treasureDropChance)) {
+      var pieces = stagePieces(stage);
+      var counts = treasureCounts(state, stage.chapter);
+      var missing = pieces.filter(function (pi) { return counts[pi] === 0; });
+      var piece = missing.length ? missing[0] : pieces[Math.floor(rand() * pieces.length)];
+      counts[piece]++;
+      rewards.treasure = { chapter: stage.chapter, piece: piece, name: D.CHAPTERS[stage.chapter - 1].treasure.pieces[piece],
+        have: counts.filter(function (x) { return x > 0; }).length, complete: treasureComplete(state, stage.chapter) };
+    }
+
     if (count >= stage.monsters && !wasCleared) {
       state.cleared[stage.id] = true;
       rewards.sectionCleared = true;
@@ -531,7 +620,7 @@ var Game = (function () {
 
     state.gold += rewards.gold + rewards.chestGold;
     state.gems += rewards.gems;
-    state.items.cureWater += rewards.cureWater;
+    state.items.ambrosia += rewards.ambrosia;
     rewards.levelsGained = addPlayerExp(state, rewards.exp);
     out.rewards = rewards;
     out.progress = sectionProgress(state, stage.id);
@@ -561,7 +650,7 @@ var Game = (function () {
     ['gems', 'gold', 'level', 'exp', 'stamina', 'staminaAt', 'pulls', 'attrPoints'].forEach(function (key) {
       if (typeof out[key] !== 'number' || !isFinite(out[key])) { out[key] = base[key]; }
     });
-    ['cleared', 'progress', 'attr', 'items'].forEach(function (key) {
+    ['cleared', 'progress', 'attr', 'items', 'treasure'].forEach(function (key) {
       if (!out[key] || typeof out[key] !== 'object' || Array.isArray(out[key])) { out[key] = base[key]; }
     });
     ['stamina', 'atk'].forEach(function (key) {
@@ -570,7 +659,14 @@ var Game = (function () {
     // DEF PWR (attr.hp) was removed; give those points back to spend again.
     if (typeof out.attr.hp === 'number' && out.attr.hp > 0) { out.attrPoints += out.attr.hp; }
     delete out.attr.hp;
-    if (typeof out.items.cureWater !== 'number' || !isFinite(out.items.cureWater)) { out.items.cureWater = 0; }
+    // Cure Water was renamed Ambrosia.
+    if (typeof out.items.ambrosia !== 'number' || !isFinite(out.items.ambrosia)) { out.items.ambrosia = 0; }
+    if (typeof out.items.cureWater === 'number' && out.items.cureWater > 0) { out.items.ambrosia += out.items.cureWater; }
+    delete out.items.cureWater;
+    Object.keys(out.treasure).forEach(function (k) {
+      var t = out.treasure[k];
+      if (!Array.isArray(t) || t.length !== 6) { delete out.treasure[k]; }
+    });
     if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
     out.version = 3;
     out.level = Math.max(1, Math.floor(out.level));
@@ -582,7 +678,9 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
-    spendPoint: spendPoint, useCureWater: useCureWater, setAlignment: setAlignment,
+    spendPoint: spendPoint, useAmbrosia: useAmbrosia, setAlignment: setAlignment,
+    skillPct: skillPct, skillText: skillText, applySkills: applySkills,
+    treasureCounts: treasureCounts, treasureComplete: treasureComplete, claimTreasure: claimTreasure, stagePieces: stagePieces,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
     deckCost: deckCost, setDeck: setDeck, bestDeck: bestDeck,

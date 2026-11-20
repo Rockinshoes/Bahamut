@@ -205,6 +205,16 @@ table.rates td { padding: 2px 12px 2px 0; }
 .fx { font-weight: 700; }
 .align-pick { display: flex; gap: 12px; align-items: center; }
 .align-art { width: 84px; flex: none; }
+
+/* Skills and treasure */
+.skill-row { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; border-bottom: 1px solid var(--panel2); font-size: 13px; }
+.skill-row:last-child { border-bottom: 0; }
+.skill-row .pct { width: 40px; flex: none; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.bu.skill .bu-card { box-shadow: 0 0 0 3px var(--accent), 0 0 18px var(--accent); transform: translateY(-6px) scale(1.06); }
+.treasure { padding: 8px 12px; }
+.tr { color: #4a4f66; }
+.treasure .tr { margin-right: 3px; font-size: 15px; }
+.tr.have { color: var(--accent); }
 </style>
 </head>
 <body>
@@ -256,52 +266,71 @@ var GameData = (function () {
     mortal:   { name: 'Mortal',   icon: '⚔', color: '#5fbf7f', atkMod: 1.0,  hpMod: 1.0,  costMod: -1,
                 blurb: 'Balanced fighters. Cost 1 less in your party.' },
     immortal: { name: 'Immortal', icon: '✦', color: '#f0c75e', atkMod: 0.85, hpMod: 1.25, costMod: 0,
-                blurb: 'The toughest cards. High HP, lower ATK.' },
+                blurb: 'The toughest cards. High DEF, lower ATK.' },
     fallen:   { name: 'Fallen',   icon: '☠', color: '#c05bd6', atkMod: 1.25, hpMod: 0.85, costMod: 0,
-                blurb: 'The hardest hitters. High ATK, lower HP.' }
+                blurb: 'The hardest hitters. High ATK, lower DEF.' }
   };
   var FACTION_ORDER = ['mortal', 'immortal', 'fallen'];
 
+  // Cards have ATK and DEF, like the original. In a battle, DEF is how much damage a card
+  // can take before it is knocked out, and each hit deals ATK x CONFIG.damagePerAtk.
   // rate = percent chance per summon. cost = deck cost. fuseExp = exp this card gives when fused.
+  // skill = strength (%) of the card's skill at this rarity.
   var RARITIES = {
-    N:   { name: 'Normal',     rate: 50, cost: 3,  atk: 20, hp: 100, fuseExp: 20,  sell: 20  },
-    R:   { name: 'Rare',       rate: 33, cost: 5,  atk: 32, hp: 150, fuseExp: 45,  sell: 50  },
-    SR:  { name: 'Super Rare', rate: 13, cost: 8,  atk: 50, hp: 230, fuseExp: 100, sell: 120 },
-    SSR: { name: 'Legendary',  rate: 4,  cost: 12, atk: 80, hp: 360, fuseExp: 220, sell: 300 }
+    N:   { name: 'Normal',     rate: 50, cost: 3,  atk: 100, def: 100, fuseExp: 20,  sell: 20,  skill: 5  },
+    R:   { name: 'Rare',       rate: 33, cost: 5,  atk: 160, def: 150, fuseExp: 45,  sell: 50,  skill: 10 },
+    SR:  { name: 'Super Rare', rate: 13, cost: 8,  atk: 250, def: 230, fuseExp: 100, sell: 120, skill: 15 },
+    SSR: { name: 'Legendary',  rate: 4,  cost: 12, atk: 400, def: 360, fuseExp: 220, sell: 300, skill: 20 }
+  };
+
+  // Card skills. Each has a chance to trigger at the start of a battle (see
+  // CONFIG.skillChanceBySlot) and then lasts the whole battle.
+  //   atkUp     +X% ATK to allies           defUp     +X% DEF to allies
+  //   atkDefUp  +X% ATK and DEF to allies   foeAtkDown / foeDefDown  -X% to every enemy
+  // A skill aimed at one faction ("fallen") only helps allies of that faction, but is
+  // CONFIG.factionSkillMult times stronger. That rewards building around your alignment.
+  var SKILL_TYPES = {
+    atkUp:      { label: 'ATK Up' },
+    defUp:      { label: 'DEF Up' },
+    atkDefUp:   { label: 'ATK & DEF Up' },
+    foeAtkDown: { label: 'Enemy ATK Down' },
+    foeDefDown: { label: 'Enemy DEF Down' }
   };
   var RARITY_ORDER = ['N', 'R', 'SR', 'SSR'];
 
-  // [id, name, faction, rarity, art style, art look]
+  // [id, name, faction, rarity, art style, art look, skill name, skill type, skill target]
   // Art styles: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
   // Art looks (color scene only, no effect on play): fire, water, wind, light, dark
+  // Skill target: 'all' (every ally) or a faction ('mortal', 'immortal', 'fallen').
+  // Enemy-lowering skills always hit every enemy, so their target is 'all'.
   var CARD_LIST = [
-    ['dawn-acolyte',      'Dawn Acolyte',      'mortal',   'N',   'sprite', 'light'],
-    ['breeze-pixie',      'Breeze Pixie',      'mortal',   'N',   'sprite', 'wind'],
-    ['cinder-archer',     'Cinder Archer',     'mortal',   'R',   'archer', 'fire'],
-    ['reed-skirmisher',   'Reed Skirmisher',   'mortal',   'R',   'archer', 'wind'],
-    ['sunblade-paladin',  'Sunblade Paladin',  'mortal',   'R',   'knight', 'light'],
-    ['storm-falconer',    'Storm Falconer',    'mortal',   'R',   'beast',  'wind'],
-    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'knight', 'fire'],
-    ['tempest-leviathan', 'Tempest Leviathan', 'mortal',   'SSR', 'dragon', 'water'],
+    ['dawn-acolyte',      'Dawn Acolyte',      'mortal',   'N',   'sprite', 'light', 'Morning Prayer', 'defUp', 'all'],
+    ['breeze-pixie',      'Breeze Pixie',      'mortal',   'N',   'sprite', 'wind', 'Tailwind', 'atkUp', 'mortal'],
+    ['cinder-archer',     'Cinder Archer',     'mortal',   'R',   'archer', 'fire', 'Piercing Volley', 'foeDefDown', 'all'],
+    ['reed-skirmisher',   'Reed Skirmisher',   'mortal',   'R',   'archer', 'wind', 'Ambush', 'atkUp', 'all'],
+    ['sunblade-paladin',  'Sunblade Paladin',  'mortal',   'R',   'knight', 'light', 'Shield Wall', 'defUp', 'mortal'],
+    ['storm-falconer',    'Storm Falconer',    'mortal',   'R',   'beast',  'wind', 'Harry', 'foeAtkDown', 'all'],
+    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'knight', 'fire', 'Warden\'s Oath', 'atkDefUp', 'mortal'],
+    ['tempest-leviathan', 'Tempest Leviathan', 'mortal',   'SSR', 'dragon', 'water', 'Maelstrom', 'foeDefDown', 'all'],
 
-    ['brook-sprite',      'Brook Sprite',      'immortal', 'N',   'sprite', 'water'],
-    ['lantern-cleric',    'Lantern Cleric',    'immortal', 'R',   'mage',   'light'],
-    ['tide-caller',       'Tide Caller',       'immortal', 'R',   'mage',   'water'],
-    ['frost-sentinel',    'Frost Sentinel',    'immortal', 'R',   'beast',  'water'],
-    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'seraph', 'light'],
-    ['cyclone-dancer',    'Cyclone Dancer',    'immortal', 'SR',  'mage',   'wind'],
-    ['radiant-archon',    'Radiant Archon',    'immortal', 'SSR', 'seraph', 'light'],
-    ['skyfather-zephyr',  'Skyfather Zephyr',  'immortal', 'SSR', 'seraph', 'wind'],
+    ['brook-sprite',      'Brook Sprite',      'immortal', 'N',   'sprite', 'water', 'Spring Blessing', 'defUp', 'all'],
+    ['lantern-cleric',    'Lantern Cleric',    'immortal', 'R',   'mage',   'light', 'Guiding Light', 'defUp', 'immortal'],
+    ['tide-caller',       'Tide Caller',       'immortal', 'R',   'mage',   'water', 'Undertow', 'foeAtkDown', 'all'],
+    ['frost-sentinel',    'Frost Sentinel',    'immortal', 'R',   'beast',  'water', 'Frostbite', 'foeDefDown', 'all'],
+    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'seraph', 'light', 'Sanctuary', 'atkDefUp', 'immortal'],
+    ['cyclone-dancer',    'Cyclone Dancer',    'immortal', 'SR',  'mage',   'wind', 'Gale Dance', 'atkUp', 'all'],
+    ['radiant-archon',    'Radiant Archon',    'immortal', 'SSR', 'seraph', 'light', 'Divine Decree', 'atkDefUp', 'immortal'],
+    ['skyfather-zephyr',  'Skyfather Zephyr',  'immortal', 'SSR', 'seraph', 'wind', 'Heaven\'s Wrath', 'atkUp', 'all'],
 
-    ['ember-imp',         'Ember Imp',         'fallen',   'N',   'sprite', 'fire'],
-    ['shade-whelp',       'Shade Whelp',       'fallen',   'N',   'sprite', 'dark'],
-    ['ashen-duelist',     'Ashen Duelist',     'fallen',   'R',   'knight', 'fire'],
-    ['gloom-thief',       'Gloom Thief',       'fallen',   'R',   'archer', 'dark'],
-    ['hollow-reaver',     'Hollow Reaver',     'fallen',   'R',   'knight', 'dark'],
-    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'mage',   'dark'],
-    ['abyss-knight',      'Abyss Knight',      'fallen',   'SR',  'tyrant', 'water'],
-    ['pyre-sovereign',    'Pyre Sovereign',    'fallen',   'SSR', 'dragon', 'fire'],
-    ['void-tyrant',       'Void Tyrant',       'fallen',   'SSR', 'tyrant', 'dark']
+    ['ember-imp',         'Ember Imp',         'fallen',   'N',   'sprite', 'fire', 'Kindle', 'atkUp', 'fallen'],
+    ['shade-whelp',       'Shade Whelp',       'fallen',   'N',   'sprite', 'dark', 'Gloom', 'foeAtkDown', 'all'],
+    ['ashen-duelist',     'Ashen Duelist',     'fallen',   'R',   'knight', 'fire', 'Cinder Edge', 'atkUp', 'fallen'],
+    ['gloom-thief',       'Gloom Thief',       'fallen',   'R',   'archer', 'dark', 'Sap', 'foeDefDown', 'all'],
+    ['hollow-reaver',     'Hollow Reaver',     'fallen',   'R',   'knight', 'dark', 'Dread', 'foeAtkDown', 'all'],
+    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'mage',   'dark', 'Shadow Hex', 'atkDefUp', 'fallen'],
+    ['abyss-knight',      'Abyss Knight',      'fallen',   'SR',  'tyrant', 'water', 'Abyssal Guard', 'defUp', 'all'],
+    ['pyre-sovereign',    'Pyre Sovereign',    'fallen',   'SSR', 'dragon', 'fire', 'Hellfire', 'atkUp', 'fallen'],
+    ['void-tyrant',       'Void Tyrant',       'fallen',   'SSR', 'tyrant', 'dark', 'Oblivion', 'foeDefDown', 'all']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
@@ -314,8 +343,9 @@ var GameData = (function () {
       rarity: c[3],
       style: c[4],
       look: c[5],
+      skill: { name: c[6], type: c[7], target: c[8] },
       atk: Math.round(r.atk * f.atkMod),
-      hp: Math.round(r.hp * f.hpMod),
+      hp: Math.round(r.def * f.hpMod),   // "hp" in the code is the DEF shown on screen
       cost: r.cost + f.costMod
     };
   });
@@ -324,23 +354,31 @@ var GameData = (function () {
 
   // Quests. Each chapter has 5 sections. Sections 1-4: beat 3 monsters, then a treasure
   // chest opens. Section 5 is the chapter boss. Every enemy in a chapter is of that
-  // chapter's faction (which changes their ATK/HP the same way it does for cards).
+  // chapter's faction (which changes their ATK/DEF the same way it does for cards).
+  // treasure: a 6-piece set. Sections 1-4 each drop "their" piece (pieces 1-4); the boss
+  // drops pieces 5 and 6. Collect all 6 to claim a card of the set's reward rarity.
   // dropWeights = chance weights for the card dropped from chests and boss battles.
   var CHAPTERS = [
     { id: 1, name: 'The Verdant Frontier', faction: 'mortal', look: 'wind',
       enemies: [{ name: 'Thornback Boar', style: 'beast' }, { name: 'Moss Brigand', style: 'archer' },
                 { name: 'Wild Gale Hawk', style: 'beast' }, { name: 'Bramble Witch', style: 'mage' }],
       boss: { name: 'Elder Treant', style: 'tyrant' },
+      treasure: { name: 'Relics of the Frontier', reward: 'SR',
+        pieces: ['Mossy Idol', 'Boar Tusk Charm', 'Hawk Feather Quill', 'Bramble Crown', 'Treant Heartwood', 'Verdant Seal'] },
       dropWeights: { N: 70, R: 27, SR: 3, SSR: 0 } },
     { id: 2, name: 'Cinder Peaks', faction: 'fallen', look: 'fire',
       enemies: [{ name: 'Magma Crawler', style: 'beast' }, { name: 'Ash Raider', style: 'knight' },
                 { name: 'Smoldering Wisp', style: 'sprite' }, { name: 'Slag Golem', style: 'tyrant' }],
       boss: { name: 'Caldera Drake', style: 'dragon' },
+      treasure: { name: 'Embers of the Peaks', reward: 'SR',
+        pieces: ['Magma Shard', 'Raider\'s Brand', 'Wisp Lantern', 'Golem Core', 'Drake Scale', 'Caldera Seal'] },
       dropWeights: { N: 40, R: 45, SR: 14, SSR: 1 } },
     { id: 3, name: 'The Hollow Sanctum', faction: 'immortal', look: 'dark',
       enemies: [{ name: 'Grave Warden', style: 'knight' }, { name: 'Dusk Stalker', style: 'beast' },
                 { name: 'Hollow Priest', style: 'mage' }, { name: 'Wailing Shade', style: 'sprite' }],
       boss: { name: 'The Pale Regent', style: 'seraph' },
+      treasure: { name: 'Regalia of the Sanctum', reward: 'SSR',
+        pieces: ['Grave Key', 'Stalker\'s Fang', 'Priest\'s Censer', 'Wailing Bell', 'Regent\'s Ring', 'Hollow Seal'] },
       dropWeights: { N: 20, R: 45, SR: 30, SSR: 5 } }
   ];
   var STAGES_PER_CHAPTER = 5;
@@ -359,11 +397,17 @@ var GameData = (function () {
     firstClearGems: 30,
     firstClearBossGems: 100,
     battleMaxRounds: 40,
+    damagePerAtk: 0.2,               // each hit deals ATK x 0.2 (+/-10%) to the target's DEF
+    expPerStamina: 1,                // quests give exp equal to the stamina spent, like the original
+    skillChanceBySlot: [1, 0.8, 0.6, 0.4, 0.2], // chance each party slot's skill triggers
+    factionSkillMult: 1.5,           // faction-only skills are 1.5x stronger
+    treasureDropChance: 0.2,         // chance a section's monster drops that section's treasure piece
+    bossTreasureChance: 0.5,         // chance a boss drops treasure piece 5 or 6
     monstersPerSection: 3,           // monsters to beat before the chest opens
     monsterDropChance: 0.2,          // chance a defeated monster drops a card
     chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
-    leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and HP
-    alignmentBonus: 1.05,            // cards matching your alignment: +5% ATK and HP
+    leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and DEF
+    alignmentBonus: 1.05,            // cards matching your alignment: +5% ATK and DEF
     sameFactionFuseMult: 1.5,        // fusing a card of the same faction gives 1.5x exp
     pointsPerLevel: 3,               // attribute points you get on each level-up
     pointsPerSectionClear: 1,        // and one more the first time you clear each section
@@ -379,7 +423,7 @@ var GameData = (function () {
   };
 
   var api = {
-    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER,
+    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER, SKILL_TYPES: SKILL_TYPES,
     CARDS: CARDS, CARD_BY_ID: CARD_BY_ID, CHAPTERS: CHAPTERS,
     STAGES_PER_CHAPTER: STAGES_PER_CHAPTER, CONFIG: CONFIG
   };
@@ -793,7 +837,9 @@ var Game = (function () {
   // ---------- player progression ----------
   function maxStamina(level, bonus) { return Math.min(100, 20 + 2 * (level - 1) + (bonus || 0)); }
   function staminaCap(state) { return maxStamina(state.level, state.attr.stamina * CFG.staminaPerPoint); }
-  function expToNext(level) { return 60 * level; }
+  // Quests give 1 exp per stamina (CONFIG.expPerStamina), so early levels take about
+  // one bar of stamina, as in the original.
+  function expToNext(level) { return 12 * level; }
   // ATK PWR: the most total card cost your party can have.
   function deckCostCap(state) { return CFG.baseAtkPower + state.attr.atk * CFG.atkPowerPerPoint; }
 
@@ -838,7 +884,8 @@ var Game = (function () {
       progress: {},         // section id -> total monsters beaten there
       attr: { stamina: 0, atk: 0 },
       attrPoints: 0,
-      items: { cureWater: 0 },
+      items: { ambrosia: 0 },
+      treasure: {},          // chapter id -> [count of piece 1, ..., count of piece 6]
       pulls: 0
     };
     (CFG.starterCards[state.alignment] || CFG.starterCards.mortal).forEach(function (id) {
@@ -883,10 +930,11 @@ var Game = (function () {
     return { ok: true };
   }
 
-  function useCureWater(state) {
-    if (state.items.cureWater < 1) { return { ok: false, error: 'You have no Cure Water.' }; }
+  // Ambrosia refills all your stamina. Bosses drop it.
+  function useAmbrosia(state) {
+    if (state.items.ambrosia < 1) { return { ok: false, error: 'You have no Ambrosia.' }; }
     if (state.stamina >= staminaCap(state)) { return { ok: false, error: 'Your stamina is already full.' }; }
-    state.items.cureWater--;
+    state.items.ambrosia--;
     state.stamina = staminaCap(state);
     return { ok: true };
   }
@@ -1132,7 +1180,7 @@ var Game = (function () {
         boss: isBoss,
         faction: ch.faction,
         hp: hp, maxHp: hp,
-        atk: Math.round(14 * power * (isBoss ? 1.5 : 1) * f.atkMod)
+        atk: Math.round(70 * power * (isBoss ? 1.5 : 1) * f.atkMod)
       });
     }
     return list;
@@ -1167,7 +1215,7 @@ var Game = (function () {
     function alive(side) { return side.filter(function (u) { return u.hp > 0; }); }
     function act(unit, side, mySide, targets, theirSide) {
       var tgt = targets[Math.floor(rand() * targets.length)];
-      var dmg = Math.max(1, Math.round(unit.atk * (0.9 + 0.2 * rand())));
+      var dmg = Math.max(1, Math.round(unit.atk * CFG.damagePerAtk * (0.9 + 0.2 * rand())));
       tgt.hp = Math.max(0, tgt.hp - dmg);
       events.push({ t: 'hit', side: side, from: mySide.indexOf(unit), to: theirSide.indexOf(tgt), dmg: dmg, hp: tgt.hp, dead: tgt.hp === 0 });
       log.push(unit.name + ' hits ' + tgt.name + ' for ' + dmg + (tgt.hp === 0 ? ' - defeated' : ''));
@@ -1211,6 +1259,79 @@ var Game = (function () {
     return addCard(state, def.id);
   }
 
+  // ---------- card skills ----------
+  // Strength in percent of a card's skill.
+  function skillPct(def) {
+    var pct = D.RARITIES[def.rarity].skill;
+    if (def.skill.target !== 'all') { pct *= CFG.factionSkillMult; }
+    if (def.skill.type === 'atkDefUp') { pct *= 0.7; } // two stats, so each is a bit smaller
+    return Math.round(pct);
+  }
+
+  // Plain-English description, e.g. "+15% ATK to Fallen allies" or "Enemy DEF -10%".
+  function skillText(def) {
+    var sk = def.skill, pct = skillPct(def);
+    var who = sk.target === 'all' ? 'all allies' : D.FACTIONS[sk.target].name + ' allies';
+    switch (sk.type) {
+      case 'atkUp': return '+' + pct + '% ATK to ' + who;
+      case 'defUp': return '+' + pct + '% DEF to ' + who;
+      case 'atkDefUp': return '+' + pct + '% ATK and DEF to ' + who;
+      case 'foeAtkDown': return 'Enemy ATK -' + pct + '%';
+      case 'foeDefDown': return 'Enemy DEF -' + pct + '%';
+    }
+    return '';
+  }
+
+  // At the start of a battle each party card rolls to trigger its skill: the first slot
+  // always does, later slots less often. Triggered skills change the units' stats for the
+  // whole battle. Returns the skill events for the battle screen to show.
+  function applySkills(team, enemies, rand) {
+    var events = [];
+    team.forEach(function (u, i) {
+      var def = D.CARD_BY_ID[u.cardId];
+      var roll = rand();
+      if (roll >= (CFG.skillChanceBySlot[i] || 0)) { return; }
+      var sk = def.skill, f = skillPct(def) / 100;
+      var allies = team.filter(function (a) { return sk.target === 'all' || a.faction === sk.target; });
+      function boost(list, atk, hp) {
+        list.forEach(function (x) {
+          if (atk) { x.atk = Math.round(x.atk * atk); }
+          if (hp) { x.hp = Math.round(x.hp * hp); x.maxHp = Math.round(x.maxHp * hp); }
+        });
+      }
+      if (sk.type === 'atkUp') { boost(allies, 1 + f, 0); }
+      else if (sk.type === 'defUp') { boost(allies, 0, 1 + f); }
+      else if (sk.type === 'atkDefUp') { boost(allies, 1 + f, 1 + f); }
+      else if (sk.type === 'foeAtkDown') { boost(enemies, 1 - f, 0); }
+      else if (sk.type === 'foeDefDown') { boost(enemies, 0, 1 - f); }
+      events.push({ t: 'skill', side: 'p', from: i, name: sk.name, text: skillText(def) });
+    });
+    return events;
+  }
+
+  // ---------- treasure ----------
+  function treasureCounts(state, chapterId) {
+    var t = state.treasure[chapterId];
+    if (!t) { t = state.treasure[chapterId] = [0, 0, 0, 0, 0, 0]; }
+    return t;
+  }
+  // Which piece (0-5) a section drops: sections 1-4 drop pieces 1-4; the boss drops 5 or 6.
+  function stagePieces(stage) { return stage.boss ? [4, 5] : [stage.num - 1]; }
+  function treasureComplete(state, chapterId) {
+    return treasureCounts(state, chapterId).every(function (n) { return n > 0; });
+  }
+  // Trade one of each of the 6 pieces for a card of the set's reward rarity.
+  function claimTreasure(state, chapterId, rand) {
+    rand = rand || Math.random;
+    var ch = D.CHAPTERS[chapterId - 1];
+    if (!ch) { return { ok: false, error: 'Unknown treasure set.' }; }
+    if (!treasureComplete(state, chapterId)) { return { ok: false, error: 'You need all 6 pieces first.' }; }
+    var t = treasureCounts(state, chapterId);
+    for (var i = 0; i < 6; i++) { t[i]--; }
+    var def = pickCardOfRarity(ch.treasure.reward, rand);
+    return { ok: true, card: addCard(state, def.id) };
+  }
+
   // What the party-select screen needs to know about the next battle in a section.
   function battleInfo(state, stageId) {
     var stage = getStage(stageId);
@@ -1238,10 +1359,11 @@ var Game = (function () {
 
     var team = buildTeam(state, state.deck);
     var enemies = info.enemies;
-    var units = { player: snapshot(team), enemy: snapshot(enemies) };
+    var skillEvents = applySkills(team, enemies, rand);
+    var units = { player: snapshot(team), enemy: snapshot(enemies) }; // stats after skills
     var sim = simulateBattle(team, enemies, rand);
     var out = {
-      ok: true, win: sim.win, rounds: sim.rounds, log: sim.log, events: sim.events,
+      ok: true, win: sim.win, rounds: sim.rounds, log: sim.log, events: skillEvents.concat(sim.events),
       units: units, stage: stage, fightNo: info.fightNo, monsters: info.monsters
     };
     if (!sim.win) { return out; } // a loss costs nothing
@@ -1252,9 +1374,9 @@ var Game = (function () {
 
     var gi = stage.index;
     var rewards = {
-      exp: stage.staminaCost * 5,
+      exp: stage.staminaCost * CFG.expPerStamina,
       gold: stage.boss ? 150 + 60 * gi : 12 + 6 * gi,
-      gems: 0, cards: [], chest: false, chestGold: 0, cureWater: 0,
+      gems: 0, cards: [], chest: false, chestGold: 0, ambrosia: 0, treasure: null,
       levelsGained: 0, firstClear: false, sectionCleared: false, points: 0
     };
 
@@ -1270,12 +1392,23 @@ var Game = (function () {
       rewards.chest = true;
       if (stage.boss) {
         rewards.cards.push(dropCard(state, stage, rand));
-        rewards.cureWater = 1;
+        rewards.ambrosia = 1;
       } else {
         rewards.chestGold = 40 + 20 * gi;
         if (rand() < CFG.chestCardChance) { rewards.cards.push(dropCard(state, stage, rand)); }
       }
     }
+    // Treasure: each monster win has a chance to drop this section's piece.
+    if (rand() < (stage.boss ? CFG.bossTreasureChance : CFG.treasureDropChance)) {
+      var pieces = stagePieces(stage);
+      var counts = treasureCounts(state, stage.chapter);
+      var missing = pieces.filter(function (pi) { return counts[pi] === 0; });
+      var piece = missing.length ? missing[0] : pieces[Math.floor(rand() * pieces.length)];
+      counts[piece]++;
+      rewards.treasure = { chapter: stage.chapter, piece: piece, name: D.CHAPTERS[stage.chapter - 1].treasure.pieces[piece],
+        have: counts.filter(function (x) { return x > 0; }).length, complete: treasureComplete(state, stage.chapter) };
+    }
+
     if (count >= stage.monsters && !wasCleared) {
       state.cleared[stage.id] = true;
       rewards.sectionCleared = true;
@@ -1287,7 +1420,7 @@ var Game = (function () {
 
     state.gold += rewards.gold + rewards.chestGold;
     state.gems += rewards.gems;
-    state.items.cureWater += rewards.cureWater;
+    state.items.ambrosia += rewards.ambrosia;
     rewards.levelsGained = addPlayerExp(state, rewards.exp);
     out.rewards = rewards;
     out.progress = sectionProgress(state, stage.id);
@@ -1317,7 +1450,7 @@ var Game = (function () {
     ['gems', 'gold', 'level', 'exp', 'stamina', 'staminaAt', 'pulls', 'attrPoints'].forEach(function (key) {
       if (typeof out[key] !== 'number' || !isFinite(out[key])) { out[key] = base[key]; }
     });
-    ['cleared', 'progress', 'attr', 'items'].forEach(function (key) {
+    ['cleared', 'progress', 'attr', 'items', 'treasure'].forEach(function (key) {
       if (!out[key] || typeof out[key] !== 'object' || Array.isArray(out[key])) { out[key] = base[key]; }
     });
     ['stamina', 'atk'].forEach(function (key) {
@@ -1326,7 +1459,14 @@ var Game = (function () {
     // DEF PWR (attr.hp) was removed; give those points back to spend again.
     if (typeof out.attr.hp === 'number' && out.attr.hp > 0) { out.attrPoints += out.attr.hp; }
     delete out.attr.hp;
-    if (typeof out.items.cureWater !== 'number' || !isFinite(out.items.cureWater)) { out.items.cureWater = 0; }
+    // Cure Water was renamed Ambrosia.
+    if (typeof out.items.ambrosia !== 'number' || !isFinite(out.items.ambrosia)) { out.items.ambrosia = 0; }
+    if (typeof out.items.cureWater === 'number' && out.items.cureWater > 0) { out.items.ambrosia += out.items.cureWater; }
+    delete out.items.cureWater;
+    Object.keys(out.treasure).forEach(function (k) {
+      var t = out.treasure[k];
+      if (!Array.isArray(t) || t.length !== 6) { delete out.treasure[k]; }
+    });
     if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
     out.version = 3;
     out.level = Math.max(1, Math.floor(out.level));
@@ -1338,7 +1478,9 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
-    spendPoint: spendPoint, useCureWater: useCureWater, setAlignment: setAlignment,
+    spendPoint: spendPoint, useAmbrosia: useAmbrosia, setAlignment: setAlignment,
+    skillPct: skillPct, skillText: skillText, applySkills: applySkills,
+    treasureCounts: treasureCounts, treasureComplete: treasureComplete, claimTreasure: claimTreasure, stagePieces: stagePieces,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
     deckCost: deckCost, setDeck: setDeck, bestDeck: bestDeck,
@@ -1463,7 +1605,7 @@ var Game = (function () {
       '<div class="art">' + artFor(def) + '</div>' +
       '<span class="rar">' + def.rarity + '</span>' +
       '<span class="lv">Lv' + card.level + stars + '</span>' + (extra || '') +
-      '<div class="info"><div class="nm">' + icon(def.faction) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' HP ' + st.hp + '</div></div></div>';
+      '<div class="info"><div class="nm">' + icon(def.faction) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' DEF ' + st.hp + '</div></div></div>';
   }
 
   function sortedCards(cards, mode) {
@@ -1511,6 +1653,19 @@ var Game = (function () {
     return 'Max stamina ' + G.staminaCap(state) + ' \u00B7 ATK PWR ' + G.deckCostCap(state) + ' (your party cost limit)';
   }
 
+  // A chapter's 6-piece treasure set: filled diamonds for pieces you own, and a Claim
+  // button once you have all six.
+  function treasureHtml(ch) {
+    var counts = G.treasureCounts(state, ch.id);
+    var have = counts.filter(function (n) { return n > 0; }).length;
+    var dots = counts.map(function (n, i) {
+      return '<span class="tr' + (n > 0 ? ' have' : '') + '" title="' + ch.treasure.pieces[i] + '">\u25C6</span>';
+    }).join('');
+    return '<div class="panel treasure row"><span class="grow"><b>' + ch.treasure.name + '</b> <span class="muted">' + have + '/6</span><br>' + dots +
+      '<span class="muted" style="font-size:12px"> \u00B7 complete for a ' + D.RARITIES[ch.treasure.reward].name + ' card</span></span>' +
+      (have === 6 ? '<button class="btn small" data-action="claim" data-ch="' + ch.id + '">Claim</button>' : '') + '</div>';
+  }
+
   function renderQuests() {
     var need = G.expToNext(state.level);
     var html = '<h2>Quests</h2>' +
@@ -1525,13 +1680,13 @@ var Game = (function () {
         '<div class="muted" style="margin-top:6px;font-size:12px">ATK PWR is the most total card cost your party can have.</div>' +
         '<div class="muted" style="margin-top:6px;font-size:12px">' + attrSummary() + '</div></div>';
     }
-    if (state.items.cureWater > 0) {
-      html += '<div class="panel row"><span><b>Cure Water x' + state.items.cureWater + '</b><br><span class="muted">Refills all your stamina</span></span><span class="spacer"></span>' +
-        '<button class="btn small" data-action="curewater"' + (state.stamina >= G.staminaCap(state) ? ' disabled' : '') + '>Use</button></div>';
+    if (state.items.ambrosia > 0) {
+      html += '<div class="panel row"><span><b>Ambrosia x' + state.items.ambrosia + '</b><br><span class="muted">Refills all your stamina</span></span><span class="spacer"></span>' +
+        '<button class="btn small" data-action="ambrosia"' + (state.stamina >= G.staminaCap(state) ? ' disabled' : '') + '>Use</button></div>';
     }
 
     D.CHAPTERS.forEach(function (ch) {
-      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' <span class="muted" style="font-weight:400;font-size:13px">' + icon(ch.faction) + ' ' + D.FACTIONS[ch.faction].name + ' foes</span></div>';
+      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' <span class="muted" style="font-weight:400;font-size:13px">' + icon(ch.faction) + ' ' + D.FACTIONS[ch.faction].name + ' foes</span></div>' + treasureHtml(ch);
       G.STAGES.filter(function (s) { return s.chapter === ch.id; }).forEach(function (s) {
         var unlocked = G.isUnlocked(state, s.id);
         var cleared = !!state.cleared[s.id];
@@ -1540,6 +1695,10 @@ var Game = (function () {
           '<div class="grow"><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') +
           (cleared ? ' <span class="cleared">Cleared</span>' : '') + '</div>' +
           '<div class="pips">' + pips(G.sectionProgress(state, s.id), s.monsters) + '</div>' +
+          '<div class="muted" style="font-size:12px">Treasure: ' + G.stagePieces(s).map(function (pi) {
+            var have = G.treasureCounts(state, ch.id)[pi] > 0;
+            return '<span class="tr' + (have ? ' have' : '') + '">\u25C6 ' + ch.treasure.pieces[pi] + '</span>';
+          }).join(' ') + '</div>' +
           '<div class="muted">' + (s.boss ? 'Boss battle' : 'Monster ' + G.nextFightNo(state, s.id) + ' of ' + s.monsters) + ' \u00B7 ' + foes.length + ' foes \u00B7 ' + s.staminaCost + ' stamina</div></div>' +
           '<button class="btn small" data-action="enter" data-stage="' + s.id + '"' + (unlocked ? '' : ' disabled') + '>' + (s.boss ? 'Challenge' : 'Enter') + '</button></div>';
       });
@@ -1566,7 +1725,7 @@ var Game = (function () {
     var html = '<h2>Deck</h2><div class="row"><span>Cost / ATK PWR <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span>' +
       '<span class="spacer"></span><button class="btn small secondary" data-action="deck-clear">Clear</button>' +
       '<button class="btn small" data-action="deck-auto">Auto-fill</button></div>' +
-      '<p class="muted" style="margin:6px 0">Your party\'s total card cost can\'t go over your ATK PWR (raise it with attribute points). The first card is your leader (+20% ATK and HP); tap \u2605 to change it. You can also pick a different party before every battle.</p><div class="slots">';
+      '<p class="muted" style="margin:6px 0">Your party\'s total card cost can\'t go over your ATK PWR (raise it with attribute points). The first card is your leader (+20% ATK and DEF); tap \u2605 to change it. You can also pick a different party before every battle.</p><div class="slots">';
     for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
       var c = state.deck[i] ? G.findCard(state, state.deck[i]) : null;
       html += '<div class="slot">' + (c ? cardHtml(c, '', 'data-action="deck-toggle"', i === 0 ? '<span class="lead">LEADER</span>' : '') +
@@ -1631,7 +1790,7 @@ var Game = (function () {
   // ---------- alignment picker (first launch, old saves, or "Change alignment") ----------
   function showAlignment() {
     var html = '<div class="sc-head"><h2>Choose your alignment</h2></div><div class="sc-body">' +
-      '<p class="muted" style="margin-top:0">Cards of your alignment get +' + alignPct() + '% ATK and HP in battle. ' +
+      '<p class="muted" style="margin-top:0">Cards of your alignment get +' + alignPct() + '% ATK and DEF in battle. ' +
       'You can still use cards of any faction.' + (freshGame ? ' You start with one champion of your alignment and build your party from cards you win in quests.' : '') + '</p>';
     D.FACTION_ORDER.forEach(function (fid) {
       var f = D.FACTIONS[fid];
@@ -1660,6 +1819,17 @@ var Game = (function () {
 
   function alignPct() { return Math.round((D.CONFIG.alignmentBonus - 1) * 100); }
 
+  // Each party slot's skill and its chance to trigger (slot 1 always triggers).
+  function partySkillsHtml() {
+    if (!party.length) { return ''; }
+    var rows = party.map(function (uid, i) {
+      var def = D.CARD_BY_ID[G.findCard(state, uid).cardId];
+      return '<div class="skill-row"><span class="pct">' + Math.round(D.CONFIG.skillChanceBySlot[i] * 100) + '%</span>' +
+        '<span class="grow"><b>' + def.skill.name + '</b> <span class="muted">(' + def.name + ')</span><br><span class="muted">' + G.skillText(def) + '</span></span></div>';
+    }).join('');
+    return '<h3>Party skills <span style="font-weight:400;font-size:12px">chance to trigger at the start of battle</span></h3><div class="panel" style="padding:6px 12px">' + rows + '</div>';
+  }
+
   function showParty(stageId, keep) {
     var info = G.battleInfo(state, stageId);
     if (!info.ok) { toast(info.error); return; }
@@ -1683,7 +1853,7 @@ var Game = (function () {
     var foeF = D.FACTIONS[info.enemies[0].faction];
     var myF = D.FACTIONS[state.alignment];
     var tip = 'These foes are ' + icon(info.enemies[0].faction) + ' ' + foeF.name + ' (' + foeF.blurb.split('.')[0].toLowerCase() + '). ' +
-      'Your ' + icon(state.alignment) + ' ' + myF.name + ' cards get +' + alignPct() + '% ATK and HP (\u25B2).';
+      'Your ' + icon(state.alignment) + ' ' + myF.name + ' cards get +' + alignPct() + '% ATK and DEF (\u25B2).';
     var reason = !party.length ? 'Pick at least one card' : (cost > cap ? 'Cost is over your ATK PWR' : (!enough ? 'Need ' + st.staminaCost + ' stamina (you have ' + state.stamina + ')' : ''));
 
     var html = '<div class="sc-head"><button class="btn small secondary" data-action="party-back">‹ Back</button>' +
@@ -1697,7 +1867,8 @@ var Game = (function () {
       html += '<div class="slot">' + (c ? cardHtml(c, '', 'data-action="party-toggle"', i === 0 ? '<span class="lead">LEADER</span>' : '') +
         (i > 0 ? '<button class="star" data-action="party-lead" data-uid="' + c.uid + '">★</button>' : '') : '+') + '</div>';
     }
-    html += '</div><p class="muted" style="margin:4px 0 0">Party power: ATK ' + atk + ' · HP ' + hp + '. The first card is the leader (+20%). Tap a card to remove it, ★ to make it leader.</p>' +
+    html += '</div><p class="muted" style="margin:4px 0 0">Party power: ATK ' + atk + ' \u00B7 DEF ' + hp + '. The first card is the leader (+20%). Tap a card to remove it, \u2605 to make it leader.</p>' +
+      partySkillsHtml() +
       '<h3>Your cards</h3><div class="card-grid">';
     sortedCards(state.cards, 'power').forEach(function (cd) {
       var inP = party.indexOf(cd.uid) !== -1;
@@ -1789,6 +1960,15 @@ var Game = (function () {
       if (run !== battleRun) { return false; }
       if (skipping) { break; }
       var e = ev[k];
+      if (e.t === 'skill') {
+        var su = unitEl('p', e.from);
+        if (su) { su.classList.add('skill'); }
+        el('b-mid').textContent = e.name + '!';
+        el('b-log').textContent = names.p[e.from].name + ' \u2014 ' + e.name + ': ' + e.text;
+        await sleep(1100 / speed);
+        if (su) { su.classList.remove('skill'); }
+        continue;
+      }
       if (e.t === 'round') {
         el('b-round').textContent = 'Round ' + e.n;
         await sleep(300 / speed);
@@ -1857,8 +2037,12 @@ var Game = (function () {
       html += '<div class="panel"><div class="reward"><span>Experience</span><b>+' + r.exp + '</b></div>' +
         '<div class="reward"><span>Gold</span><b>+' + r.gold + '</b></div>' +
         (r.gems ? '<div class="reward"><span>Gems (first clear)</span><b>+' + r.gems + '</b></div>' : '') +
-        (r.cureWater ? '<div class="reward"><span>Cure Water</span><b>+' + r.cureWater + '</b></div>' : '') +
+        (r.ambrosia ? '<div class="reward"><span>Ambrosia</span><b>+' + r.ambrosia + '</b></div>' : '') +
+        (r.treasure ? '<div class="reward"><span>Treasure: ' + r.treasure.name + '</span><b>' + r.treasure.have + '/6</b></div>' : '') +
         (r.points ? '<div class="reward"><span>Attribute point (first clear)</span><b>+' + r.points + '</b></div>' : '') + '</div>';
+      if (r.treasure && r.treasure.complete) {
+        html += '<div class="levelup">Treasure set complete! Claim your card on the Quests tab.</div>';
+      }
       if (r.levelsGained) {
         html += '<div class="levelup">Level up! You are now level ' + state.level + '.<br>+' + (r.levelsGained * D.CONFIG.pointsPerLevel) + ' attribute points. Stamina refilled.</div>';
       }
@@ -1892,7 +2076,8 @@ var Game = (function () {
       (def.faction === state.alignment ? ' (your alignment, +' + alignPct() + '% in battle)' : '') +
       ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
       '<div class="panel">Level ' + card.level + ' / ' + st.maxLevel + (card.level < st.maxLevel ? ' &middot; exp ' + card.exp + ' / ' + G.cardExpToNext(card) : ' (max)') +
-      '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; HP ' + st.hp + '</div>' +
+      '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; DEF ' + st.hp + '</div>' +
+      '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br><span class="muted">' + G.skillText(def) + '. Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
       '<div class="row wrap">' +
       '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Fuse</button>' +
       '<button class="btn" data-action="evolve-open" data-uid="' + uid + '">Evolve</button>' +
@@ -2012,8 +2197,15 @@ var Game = (function () {
         if (!res.ok) { toast(res.error); break; }
         save(); render();
         break;
-      case 'curewater':
-        res = G.useCureWater(state);
+      case 'claim':
+        res = G.claimTreasure(state, parseInt(node.getAttribute('data-ch'), 10));
+        if (!res.ok) { toast(res.error); break; }
+        save(); render();
+        openModal('<h2>Treasure claimed!</h2><p class="muted">You traded in a full set for:</p><div style="width:140px;margin:0 auto 12px">' +
+          cardHtml(res.card) + '</div><div class="row"><button class="btn" data-action="close">Nice</button></div>');
+        break;
+      case 'ambrosia':
+        res = G.useAmbrosia(state);
         if (!res.ok) { toast(res.error); break; }
         save(); render(); toast('Stamina refilled.');
         break;

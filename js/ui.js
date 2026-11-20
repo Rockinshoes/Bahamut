@@ -107,7 +107,7 @@
       '<div class="art">' + artFor(def) + '</div>' +
       '<span class="rar">' + def.rarity + '</span>' +
       '<span class="lv">Lv' + card.level + stars + '</span>' + (extra || '') +
-      '<div class="info"><div class="nm">' + icon(def.faction) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' HP ' + st.hp + '</div></div></div>';
+      '<div class="info"><div class="nm">' + icon(def.faction) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' DEF ' + st.hp + '</div></div></div>';
   }
 
   function sortedCards(cards, mode) {
@@ -155,6 +155,19 @@
     return 'Max stamina ' + G.staminaCap(state) + ' \u00B7 ATK PWR ' + G.deckCostCap(state) + ' (your party cost limit)';
   }
 
+  // A chapter's 6-piece treasure set: filled diamonds for pieces you own, and a Claim
+  // button once you have all six.
+  function treasureHtml(ch) {
+    var counts = G.treasureCounts(state, ch.id);
+    var have = counts.filter(function (n) { return n > 0; }).length;
+    var dots = counts.map(function (n, i) {
+      return '<span class="tr' + (n > 0 ? ' have' : '') + '" title="' + ch.treasure.pieces[i] + '">\u25C6</span>';
+    }).join('');
+    return '<div class="panel treasure row"><span class="grow"><b>' + ch.treasure.name + '</b> <span class="muted">' + have + '/6</span><br>' + dots +
+      '<span class="muted" style="font-size:12px"> \u00B7 complete for a ' + D.RARITIES[ch.treasure.reward].name + ' card</span></span>' +
+      (have === 6 ? '<button class="btn small" data-action="claim" data-ch="' + ch.id + '">Claim</button>' : '') + '</div>';
+  }
+
   function renderQuests() {
     var need = G.expToNext(state.level);
     var html = '<h2>Quests</h2>' +
@@ -169,13 +182,13 @@
         '<div class="muted" style="margin-top:6px;font-size:12px">ATK PWR is the most total card cost your party can have.</div>' +
         '<div class="muted" style="margin-top:6px;font-size:12px">' + attrSummary() + '</div></div>';
     }
-    if (state.items.cureWater > 0) {
-      html += '<div class="panel row"><span><b>Cure Water x' + state.items.cureWater + '</b><br><span class="muted">Refills all your stamina</span></span><span class="spacer"></span>' +
-        '<button class="btn small" data-action="curewater"' + (state.stamina >= G.staminaCap(state) ? ' disabled' : '') + '>Use</button></div>';
+    if (state.items.ambrosia > 0) {
+      html += '<div class="panel row"><span><b>Ambrosia x' + state.items.ambrosia + '</b><br><span class="muted">Refills all your stamina</span></span><span class="spacer"></span>' +
+        '<button class="btn small" data-action="ambrosia"' + (state.stamina >= G.staminaCap(state) ? ' disabled' : '') + '>Use</button></div>';
     }
 
     D.CHAPTERS.forEach(function (ch) {
-      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' <span class="muted" style="font-weight:400;font-size:13px">' + icon(ch.faction) + ' ' + D.FACTIONS[ch.faction].name + ' foes</span></div>';
+      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' <span class="muted" style="font-weight:400;font-size:13px">' + icon(ch.faction) + ' ' + D.FACTIONS[ch.faction].name + ' foes</span></div>' + treasureHtml(ch);
       G.STAGES.filter(function (s) { return s.chapter === ch.id; }).forEach(function (s) {
         var unlocked = G.isUnlocked(state, s.id);
         var cleared = !!state.cleared[s.id];
@@ -184,6 +197,10 @@
           '<div class="grow"><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') +
           (cleared ? ' <span class="cleared">Cleared</span>' : '') + '</div>' +
           '<div class="pips">' + pips(G.sectionProgress(state, s.id), s.monsters) + '</div>' +
+          '<div class="muted" style="font-size:12px">Treasure: ' + G.stagePieces(s).map(function (pi) {
+            var have = G.treasureCounts(state, ch.id)[pi] > 0;
+            return '<span class="tr' + (have ? ' have' : '') + '">\u25C6 ' + ch.treasure.pieces[pi] + '</span>';
+          }).join(' ') + '</div>' +
           '<div class="muted">' + (s.boss ? 'Boss battle' : 'Monster ' + G.nextFightNo(state, s.id) + ' of ' + s.monsters) + ' \u00B7 ' + foes.length + ' foes \u00B7 ' + s.staminaCost + ' stamina</div></div>' +
           '<button class="btn small" data-action="enter" data-stage="' + s.id + '"' + (unlocked ? '' : ' disabled') + '>' + (s.boss ? 'Challenge' : 'Enter') + '</button></div>';
       });
@@ -210,7 +227,7 @@
     var html = '<h2>Deck</h2><div class="row"><span>Cost / ATK PWR <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span>' +
       '<span class="spacer"></span><button class="btn small secondary" data-action="deck-clear">Clear</button>' +
       '<button class="btn small" data-action="deck-auto">Auto-fill</button></div>' +
-      '<p class="muted" style="margin:6px 0">Your party\'s total card cost can\'t go over your ATK PWR (raise it with attribute points). The first card is your leader (+20% ATK and HP); tap \u2605 to change it. You can also pick a different party before every battle.</p><div class="slots">';
+      '<p class="muted" style="margin:6px 0">Your party\'s total card cost can\'t go over your ATK PWR (raise it with attribute points). The first card is your leader (+20% ATK and DEF); tap \u2605 to change it. You can also pick a different party before every battle.</p><div class="slots">';
     for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
       var c = state.deck[i] ? G.findCard(state, state.deck[i]) : null;
       html += '<div class="slot">' + (c ? cardHtml(c, '', 'data-action="deck-toggle"', i === 0 ? '<span class="lead">LEADER</span>' : '') +
@@ -275,7 +292,7 @@
   // ---------- alignment picker (first launch, old saves, or "Change alignment") ----------
   function showAlignment() {
     var html = '<div class="sc-head"><h2>Choose your alignment</h2></div><div class="sc-body">' +
-      '<p class="muted" style="margin-top:0">Cards of your alignment get +' + alignPct() + '% ATK and HP in battle. ' +
+      '<p class="muted" style="margin-top:0">Cards of your alignment get +' + alignPct() + '% ATK and DEF in battle. ' +
       'You can still use cards of any faction.' + (freshGame ? ' You start with one champion of your alignment and build your party from cards you win in quests.' : '') + '</p>';
     D.FACTION_ORDER.forEach(function (fid) {
       var f = D.FACTIONS[fid];
@@ -304,6 +321,17 @@
 
   function alignPct() { return Math.round((D.CONFIG.alignmentBonus - 1) * 100); }
 
+  // Each party slot's skill and its chance to trigger (slot 1 always triggers).
+  function partySkillsHtml() {
+    if (!party.length) { return ''; }
+    var rows = party.map(function (uid, i) {
+      var def = D.CARD_BY_ID[G.findCard(state, uid).cardId];
+      return '<div class="skill-row"><span class="pct">' + Math.round(D.CONFIG.skillChanceBySlot[i] * 100) + '%</span>' +
+        '<span class="grow"><b>' + def.skill.name + '</b> <span class="muted">(' + def.name + ')</span><br><span class="muted">' + G.skillText(def) + '</span></span></div>';
+    }).join('');
+    return '<h3>Party skills <span style="font-weight:400;font-size:12px">chance to trigger at the start of battle</span></h3><div class="panel" style="padding:6px 12px">' + rows + '</div>';
+  }
+
   function showParty(stageId, keep) {
     var info = G.battleInfo(state, stageId);
     if (!info.ok) { toast(info.error); return; }
@@ -327,7 +355,7 @@
     var foeF = D.FACTIONS[info.enemies[0].faction];
     var myF = D.FACTIONS[state.alignment];
     var tip = 'These foes are ' + icon(info.enemies[0].faction) + ' ' + foeF.name + ' (' + foeF.blurb.split('.')[0].toLowerCase() + '). ' +
-      'Your ' + icon(state.alignment) + ' ' + myF.name + ' cards get +' + alignPct() + '% ATK and HP (\u25B2).';
+      'Your ' + icon(state.alignment) + ' ' + myF.name + ' cards get +' + alignPct() + '% ATK and DEF (\u25B2).';
     var reason = !party.length ? 'Pick at least one card' : (cost > cap ? 'Cost is over your ATK PWR' : (!enough ? 'Need ' + st.staminaCost + ' stamina (you have ' + state.stamina + ')' : ''));
 
     var html = '<div class="sc-head"><button class="btn small secondary" data-action="party-back">‹ Back</button>' +
@@ -341,7 +369,8 @@
       html += '<div class="slot">' + (c ? cardHtml(c, '', 'data-action="party-toggle"', i === 0 ? '<span class="lead">LEADER</span>' : '') +
         (i > 0 ? '<button class="star" data-action="party-lead" data-uid="' + c.uid + '">★</button>' : '') : '+') + '</div>';
     }
-    html += '</div><p class="muted" style="margin:4px 0 0">Party power: ATK ' + atk + ' · HP ' + hp + '. The first card is the leader (+20%). Tap a card to remove it, ★ to make it leader.</p>' +
+    html += '</div><p class="muted" style="margin:4px 0 0">Party power: ATK ' + atk + ' \u00B7 DEF ' + hp + '. The first card is the leader (+20%). Tap a card to remove it, \u2605 to make it leader.</p>' +
+      partySkillsHtml() +
       '<h3>Your cards</h3><div class="card-grid">';
     sortedCards(state.cards, 'power').forEach(function (cd) {
       var inP = party.indexOf(cd.uid) !== -1;
@@ -433,6 +462,15 @@
       if (run !== battleRun) { return false; }
       if (skipping) { break; }
       var e = ev[k];
+      if (e.t === 'skill') {
+        var su = unitEl('p', e.from);
+        if (su) { su.classList.add('skill'); }
+        el('b-mid').textContent = e.name + '!';
+        el('b-log').textContent = names.p[e.from].name + ' \u2014 ' + e.name + ': ' + e.text;
+        await sleep(1100 / speed);
+        if (su) { su.classList.remove('skill'); }
+        continue;
+      }
       if (e.t === 'round') {
         el('b-round').textContent = 'Round ' + e.n;
         await sleep(300 / speed);
@@ -501,8 +539,12 @@
       html += '<div class="panel"><div class="reward"><span>Experience</span><b>+' + r.exp + '</b></div>' +
         '<div class="reward"><span>Gold</span><b>+' + r.gold + '</b></div>' +
         (r.gems ? '<div class="reward"><span>Gems (first clear)</span><b>+' + r.gems + '</b></div>' : '') +
-        (r.cureWater ? '<div class="reward"><span>Cure Water</span><b>+' + r.cureWater + '</b></div>' : '') +
+        (r.ambrosia ? '<div class="reward"><span>Ambrosia</span><b>+' + r.ambrosia + '</b></div>' : '') +
+        (r.treasure ? '<div class="reward"><span>Treasure: ' + r.treasure.name + '</span><b>' + r.treasure.have + '/6</b></div>' : '') +
         (r.points ? '<div class="reward"><span>Attribute point (first clear)</span><b>+' + r.points + '</b></div>' : '') + '</div>';
+      if (r.treasure && r.treasure.complete) {
+        html += '<div class="levelup">Treasure set complete! Claim your card on the Quests tab.</div>';
+      }
       if (r.levelsGained) {
         html += '<div class="levelup">Level up! You are now level ' + state.level + '.<br>+' + (r.levelsGained * D.CONFIG.pointsPerLevel) + ' attribute points. Stamina refilled.</div>';
       }
@@ -536,7 +578,8 @@
       (def.faction === state.alignment ? ' (your alignment, +' + alignPct() + '% in battle)' : '') +
       ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
       '<div class="panel">Level ' + card.level + ' / ' + st.maxLevel + (card.level < st.maxLevel ? ' &middot; exp ' + card.exp + ' / ' + G.cardExpToNext(card) : ' (max)') +
-      '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; HP ' + st.hp + '</div>' +
+      '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; DEF ' + st.hp + '</div>' +
+      '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br><span class="muted">' + G.skillText(def) + '. Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
       '<div class="row wrap">' +
       '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Fuse</button>' +
       '<button class="btn" data-action="evolve-open" data-uid="' + uid + '">Evolve</button>' +
@@ -656,8 +699,15 @@
         if (!res.ok) { toast(res.error); break; }
         save(); render();
         break;
-      case 'curewater':
-        res = G.useCureWater(state);
+      case 'claim':
+        res = G.claimTreasure(state, parseInt(node.getAttribute('data-ch'), 10));
+        if (!res.ok) { toast(res.error); break; }
+        save(); render();
+        openModal('<h2>Treasure claimed!</h2><p class="muted">You traded in a full set for:</p><div style="width:140px;margin:0 auto 12px">' +
+          cardHtml(res.card) + '</div><div class="row"><button class="btn" data-action="close">Nice</button></div>');
+        break;
+      case 'ambrosia':
+        res = G.useAmbrosia(state);
         if (!res.ok) { toast(res.error); break; }
         save(); render(); toast('Stamina refilled.');
         break;
