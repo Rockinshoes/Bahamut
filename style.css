@@ -191,3 +191,8 @@ table.rates td { padding: 2px 12px 2px 0; }
 @media (prefers-reduced-motion: reduce) {
   .bu.hit .bu-card, .dmg { animation-duration: .01s; }
 }
+
+/* Factions and the alignment picker */
+.fx { font-weight: 700; }
+.align-pick { display: flex; gap: 12px; align-items: center; }
+.align-art { width: 84px; flex: none; }

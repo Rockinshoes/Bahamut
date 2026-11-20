@@ -37,11 +37,12 @@ function strongState() {
 }
 
 console.log('Game data');
-test('every card has a unique id, valid element, rarity and art style', function () {
+test('every card has a unique id, valid faction, rarity and art style', function () {
   var ids = {};
   D.CARDS.forEach(function (c) {
     assert(!ids[c.id], 'duplicate id ' + c.id); ids[c.id] = true;
-    assert(D.ELEMENTS[c.element], 'bad element on ' + c.id);
+    assert(D.FACTIONS[c.faction], 'bad faction on ' + c.id);
+    assert(c.look, 'missing art look on ' + c.id);
     assert(D.RARITIES[c.rarity], 'bad rarity on ' + c.id);
     assert(c.style, 'missing art style on ' + c.id);
   });
@@ -51,10 +52,25 @@ test('summon rates add up to 100', function () {
   D.RARITY_ORDER.forEach(function (r) { sum += D.RARITIES[r].rate; });
   assert.strictEqual(sum, 100);
 });
-test('starter cards exist and fit the starting deck cost limit', function () {
-  var s = G.newGame({ now: 0 });
-  assert.strictEqual(s.cards.length, D.CONFIG.starterCards.length);
-  assert(G.deckCost(s, s.deck) <= G.deckCostCap(s.level));
+test('there are exactly three factions and each has N, R, SR and SSR cards', function () {
+  assert.deepStrictEqual(Object.keys(D.FACTIONS).sort(), ['fallen', 'immortal', 'mortal']);
+  D.FACTION_ORDER.forEach(function (f) {
+    D.RARITY_ORDER.forEach(function (r) {
+      assert(D.CARDS.some(function (c) { return c.faction === f && c.rarity === r; }), f + ' has no ' + r + ' card');
+    });
+  });
+});
+test('each alignment gets its own starter cards, which exist and fit the cost limit', function () {
+  D.FACTION_ORDER.forEach(function (f) {
+    var s = G.newGame({ now: 0, alignment: f });
+    assert.strictEqual(s.alignment, f);
+    assert.strictEqual(s.cards.length, 5);
+    s.cards.forEach(function (c) { assert(D.CARD_BY_ID[c.cardId], 'unknown starter ' + c.cardId); });
+    assert(G.deckCost(s, s.deck) <= G.deckCostCap(s.level));
+    var own = s.cards.filter(function (c) { return D.CARD_BY_ID[c.cardId].faction === f; }).length;
+    assert(own >= 3, f + ' starters should be mostly ' + f);
+  });
+  assert.strictEqual(G.newGame({ now: 0 }).alignment, null, 'no alignment until the player picks one');
 });
 
 console.log('Placeholder art');
@@ -66,7 +82,7 @@ test('every card and enemy gets a clean SVG drawing', function () {
   });
   D.CHAPTERS.forEach(function (ch) {
     ch.enemies.concat([ch.boss]).forEach(function (e) {
-      var svg = Art.enemy({ name: e.name, style: e.style, element: ch.element, boss: e === ch.boss });
+      var svg = Art.enemy({ name: e.name, style: e.style, look: ch.look, boss: e === ch.boss });
       assert(svg.indexOf('<svg') === 0 && !/NaN|undefined/.test(svg), e.name + ' drawing is broken');
     });
   });
@@ -157,14 +173,14 @@ test('fusing adds exp, uses materials, costs gold', function () {
   assert(!G.findCard(s, mat.uid), 'material should be consumed');
   assert(base.level > 1 || base.exp > 0);
 });
-test('same-element materials give 1.5x exp', function () {
+test('same-faction materials give 1.5x exp', function () {
   var s = G.newGame({ now: 0 });
   var base = G.addCard(s, 'ember-imp');
   var same = G.addCard(s, 'ashen-duelist');
   var other = G.addCard(s, 'brook-sprite');
   var sameVal = G.fusePreview(s, base.uid, [same.uid]).exp;
   var otherVal = G.fusePreview(s, base.uid, [other.uid]).exp;
-  // R (45) same element = 68, N (20) other element = 20
+  // R (45) same faction = 68, N (20) other faction = 20
   assert.strictEqual(sameVal, 68); assert.strictEqual(otherVal, 20);
 });
 test('cannot fuse a deck card, itself, or past the level cap', function () {
@@ -208,11 +224,39 @@ test('selling gives gold and removes the card', function () {
 });
 
 console.log('Quests and battles');
-test('element advantage works both ways', function () {
-  assert.strictEqual(G.elementMult('fire', 'wind'), 1.5);
-  assert.strictEqual(G.elementMult('wind', 'fire'), 0.75);
-  assert.strictEqual(G.elementMult('light', 'dark'), 1.5);
-  assert.strictEqual(G.elementMult('fire', 'fire'), 1);
+test('factions lean the way the original types did: Fallen ATK, Immortal HP, Mortal cheaper', function () {
+  var fallen = D.CARD_BY_ID['gloom-thief'], immortal = D.CARD_BY_ID['tide-caller'], mortal = D.CARD_BY_ID['cinder-archer']; // all R
+  assert(fallen.atk > mortal.atk && mortal.atk > immortal.atk);
+  assert(immortal.hp > mortal.hp && mortal.hp > fallen.hp);
+  assert.strictEqual(mortal.cost, D.RARITIES.R.cost - 1);
+  assert.strictEqual(fallen.cost, D.RARITIES.R.cost);
+});
+test('there is no damage weakness: a hit only depends on the attacker\'s ATK', function () {
+  var a = [{ name: 'A', faction: 'fallen', atk: 100, hp: 1000, maxHp: 1000 }];
+  var b = [{ name: 'B', faction: 'mortal', atk: 1, hp: 1000, maxHp: 1000 }];
+  var r = G.simulateBattle(a, b, function () { return 0.5; });
+  var hit = r.events.filter(function (e) { return e.t === 'hit' && e.side === 'p'; })[0];
+  assert.strictEqual(hit.dmg, 100);
+});
+test('cards matching your alignment get +15% ATK and HP; others do not', function () {
+  var s = G.newGame({ now: 0, alignment: 'fallen' });
+  s.cards = []; s.deck = [];
+  var f = G.addCard(s, 'hollow-reaver'), m = G.addCard(s, 'sunblade-paladin'), x = G.addCard(s, 'gloom-thief');
+  var team = G.buildTeam(s, [m.uid, f.uid, x.uid]); // mortal leader, then two fallen
+  var sf = G.cardStats(f), sm = G.cardStats(m);
+  assert(!team[0].aligned && team[1].aligned && team[2].aligned);
+  assert.strictEqual(team[1].atk, Math.round(sf.atk * D.CONFIG.alignmentBonus));
+  assert.strictEqual(team[1].maxHp, Math.round(sf.hp * D.CONFIG.alignmentBonus));
+  assert.strictEqual(team[0].atk, Math.round(sm.atk * D.CONFIG.leaderMult));
+  assert(G.setAlignment(s, 'mortal').ok);
+  assert(G.buildTeam(s, [m.uid])[0].aligned);
+  assert(!G.setAlignment(s, 'dragon').ok);
+});
+test('chapter enemies belong to the chapter\'s faction', function () {
+  G.STAGES.forEach(function (st) {
+    var ch = D.CHAPTERS[st.chapter - 1];
+    G.stageEnemies(st, 1).forEach(function (e) { assert.strictEqual(e.faction, ch.faction); });
+  });
 });
 test('sections unlock in order', function () {
   var s = G.newGame({ now: 0 });
@@ -370,12 +414,15 @@ test('save and load round-trips, and bad saves are rejected', function () {
   var s = G.newGame({ now: 0 });
   G.summon(s, 10, seeded(9));
   G.fight(s, '1-1', { rand: seeded(2), now: 0 });
-  s.attr.atk = 2; s.items.cureWater = 3;
+  s.attr.atk = 2; s.items.cureWater = 3; s.alignment = 'immortal';
   var back = G.deserialize(G.serialize(s));
   assert.deepStrictEqual(back.cards, s.cards);
   assert.deepStrictEqual(back.progress, s.progress);
   assert.deepStrictEqual(back.attr, s.attr);
   assert.strictEqual(back.items.cureWater, 3);
+  assert.strictEqual(back.alignment, 'immortal');
+  var odd = JSON.parse(G.serialize(s)); odd.alignment = 'dragon';
+  assert.strictEqual(G.deserialize(JSON.stringify(odd)).alignment, null, 'unknown alignment is cleared so the game asks again');
   assert.strictEqual(back.gems, s.gems);
   assert.strictEqual(G.deserialize('not json'), null);
   assert.strictEqual(G.deserialize('{"hello":1}'), null);
@@ -391,6 +438,7 @@ test('saves from the first version (no progress/attributes/items) still load', f
   assert.strictEqual(back.items.cureWater, 0);
   assert.strictEqual(back.attrPoints, 0);
   assert(back.cleared['1-1']);
+  assert.strictEqual(back.alignment, null, 'old saves have no alignment yet; the game asks for one');
   assert(G.fight(back, '1-2', { rand: seeded(1), now: 0 }).ok, 'old save should be playable');
 });
 test('loading drops unknown cards and keeps new uids unique', function () {

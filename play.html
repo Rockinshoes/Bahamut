@@ -200,6 +200,11 @@ table.rates td { padding: 2px 12px 2px 0; }
 @media (prefers-reduced-motion: reduce) {
   .bu.hit .bu-card, .dmg { animation-duration: .01s; }
 }
+
+/* Factions and the alignment picker */
+.fx { font-weight: 700; }
+.align-pick { display: flex; gap: 12px; align-items: center; }
+.align-art { width: 84px; flex: none; }
 </style>
 </head>
 <body>
@@ -232,7 +237,7 @@ table.rates td { padding: 2px 12px 2px 0; }
 
   <script>
 /*
- * data.js - all the game's content: elements, rarities, cards, chapters.
+ * data.js - all the game's content: factions, rarities, cards, chapters.
  * Edit this file to add cards or change balance. No other file needs to change
  * when you add a card (just add a line to the CARD_LIST below).
  *
@@ -243,14 +248,18 @@ table.rates td { padding: 2px 12px 2px 0; }
 var GameData = (function () {
   'use strict';
 
-  // Fire beats Wind, Wind beats Water, Water beats Fire. Light and Dark beat each other.
-  var ELEMENTS = {
-    fire:  { name: 'Fire',  icon: '🔥', color: '#e4572e', beats: 'wind',  atkMod: 1.1, hpMod: 0.9 },
-    water: { name: 'Water', icon: '💧', color: '#2e86e4', beats: 'fire',  atkMod: 0.9, hpMod: 1.1 },
-    wind:  { name: 'Wind',  icon: '🍃', color: '#3fb56b', beats: 'water', atkMod: 1.0, hpMod: 1.0 },
-    light: { name: 'Light', icon: '✨',       color: '#e8c547', beats: 'dark',  atkMod: 1.0, hpMod: 1.0 },
-    dark:  { name: 'Dark',  icon: '🌑', color: '#8e5bd6', beats: 'light', atkMod: 1.05, hpMod: 0.95 }
+  // Three factions, like the original's Man / God / Demon. There is no damage weakness
+  // between them. Each leans a different way, and cards matching the alignment you
+  // picked at the start get a bonus (CONFIG.alignmentBonus).
+  var FACTIONS = {
+    mortal:   { name: 'Mortal',   icon: '⚔', color: '#5fbf7f', atkMod: 1.0,  hpMod: 1.0,  costMod: -1,
+                blurb: 'Balanced fighters. Cost 1 less in your party.' },
+    immortal: { name: 'Immortal', icon: '✦', color: '#f0c75e', atkMod: 0.85, hpMod: 1.25, costMod: 0,
+                blurb: 'The toughest cards. High HP, lower ATK.' },
+    fallen:   { name: 'Fallen',   icon: '☠', color: '#c05bd6', atkMod: 1.25, hpMod: 0.85, costMod: 0,
+                blurb: 'The hardest hitters. High ATK, lower HP.' }
   };
+  var FACTION_ORDER = ['mortal', 'immortal', 'fallen'];
 
   // rate = percent chance per summon. cost = deck cost. fuseExp = exp this card gives when fused.
   var RARITIES = {
@@ -261,72 +270,73 @@ var GameData = (function () {
   };
   var RARITY_ORDER = ['N', 'R', 'SR', 'SSR'];
 
-  // [id, name, element, rarity, art style]
-  // Art styles used by the placeholder art: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
+  // [id, name, faction, rarity, art style, art look]
+  // Art styles: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
+  // Art looks (color scene only, no effect on play): fire, water, wind, light, dark
   var CARD_LIST = [
-    ['ember-imp',         'Ember Imp',         'fire',  'N',   'sprite'],
-    ['cinder-archer',     'Cinder Archer',     'fire',  'R',   'archer'],
-    ['ashen-duelist',     'Ashen Duelist',     'fire',  'R',   'knight'],
-    ['flame-warden',      'Flame Warden',      'fire',  'SR',  'knight'],
-    ['pyre-sovereign',    'Pyre Sovereign',    'fire',  'SSR', 'dragon'],
+    ['dawn-acolyte',      'Dawn Acolyte',      'mortal',   'N',   'sprite', 'light'],
+    ['breeze-pixie',      'Breeze Pixie',      'mortal',   'N',   'sprite', 'wind'],
+    ['cinder-archer',     'Cinder Archer',     'mortal',   'R',   'archer', 'fire'],
+    ['reed-skirmisher',   'Reed Skirmisher',   'mortal',   'R',   'archer', 'wind'],
+    ['sunblade-paladin',  'Sunblade Paladin',  'mortal',   'R',   'knight', 'light'],
+    ['storm-falconer',    'Storm Falconer',    'mortal',   'R',   'beast',  'wind'],
+    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'knight', 'fire'],
+    ['tempest-leviathan', 'Tempest Leviathan', 'mortal',   'SSR', 'dragon', 'water'],
 
-    ['brook-sprite',      'Brook Sprite',      'water', 'N',   'sprite'],
-    ['tide-caller',       'Tide Caller',       'water', 'R',   'mage'],
-    ['frost-sentinel',    'Frost Sentinel',    'water', 'R',   'beast'],
-    ['abyss-knight',      'Abyss Knight',      'water', 'SR',  'tyrant'],
-    ['tempest-leviathan', 'Tempest Leviathan', 'water', 'SSR', 'dragon'],
+    ['brook-sprite',      'Brook Sprite',      'immortal', 'N',   'sprite', 'water'],
+    ['lantern-cleric',    'Lantern Cleric',    'immortal', 'R',   'mage',   'light'],
+    ['tide-caller',       'Tide Caller',       'immortal', 'R',   'mage',   'water'],
+    ['frost-sentinel',    'Frost Sentinel',    'immortal', 'R',   'beast',  'water'],
+    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'seraph', 'light'],
+    ['cyclone-dancer',    'Cyclone Dancer',    'immortal', 'SR',  'mage',   'wind'],
+    ['radiant-archon',    'Radiant Archon',    'immortal', 'SSR', 'seraph', 'light'],
+    ['skyfather-zephyr',  'Skyfather Zephyr',  'immortal', 'SSR', 'seraph', 'wind'],
 
-    ['breeze-pixie',      'Breeze Pixie',      'wind',  'N',   'sprite'],
-    ['reed-skirmisher',   'Reed Skirmisher',   'wind',  'R',   'archer'],
-    ['storm-falconer',    'Storm Falconer',    'wind',  'R',   'beast'],
-    ['cyclone-dancer',    'Cyclone Dancer',    'wind',  'SR',  'mage'],
-    ['skyfather-zephyr',  'Skyfather Zephyr',  'wind',  'SSR', 'seraph'],
-
-    ['dawn-acolyte',      'Dawn Acolyte',      'light', 'N',   'sprite'],
-    ['lantern-cleric',    'Lantern Cleric',    'light', 'R',   'mage'],
-    ['sunblade-paladin',  'Sunblade Paladin',  'light', 'R',   'knight'],
-    ['halo-seraph',       'Halo Seraph',       'light', 'SR',  'seraph'],
-    ['radiant-archon',    'Radiant Archon',    'light', 'SSR', 'seraph'],
-
-    ['shade-whelp',       'Shade Whelp',       'dark',  'N',   'sprite'],
-    ['gloom-thief',       'Gloom Thief',       'dark',  'R',   'archer'],
-    ['hollow-reaver',     'Hollow Reaver',     'dark',  'R',   'knight'],
-    ['night-sorceress',   'Night Sorceress',   'dark',  'SR',  'mage'],
-    ['void-tyrant',       'Void Tyrant',       'dark',  'SSR', 'tyrant']
+    ['ember-imp',         'Ember Imp',         'fallen',   'N',   'sprite', 'fire'],
+    ['shade-whelp',       'Shade Whelp',       'fallen',   'N',   'sprite', 'dark'],
+    ['ashen-duelist',     'Ashen Duelist',     'fallen',   'R',   'knight', 'fire'],
+    ['gloom-thief',       'Gloom Thief',       'fallen',   'R',   'archer', 'dark'],
+    ['hollow-reaver',     'Hollow Reaver',     'fallen',   'R',   'knight', 'dark'],
+    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'mage',   'dark'],
+    ['abyss-knight',      'Abyss Knight',      'fallen',   'SR',  'tyrant', 'water'],
+    ['pyre-sovereign',    'Pyre Sovereign',    'fallen',   'SSR', 'dragon', 'fire'],
+    ['void-tyrant',       'Void Tyrant',       'fallen',   'SSR', 'tyrant', 'dark']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
     var r = RARITIES[c[3]];
-    var e = ELEMENTS[c[2]];
+    var f = FACTIONS[c[2]];
     return {
       id: c[0],
       name: c[1],
-      element: c[2],
+      faction: c[2],
       rarity: c[3],
       style: c[4],
-      atk: Math.round(r.atk * e.atkMod),
-      hp: Math.round(r.hp * e.hpMod),
-      cost: r.cost
+      look: c[5],
+      atk: Math.round(r.atk * f.atkMod),
+      hp: Math.round(r.hp * f.hpMod),
+      cost: r.cost + f.costMod
     };
   });
   var CARD_BY_ID = {};
   CARDS.forEach(function (c) { CARD_BY_ID[c.id] = c; });
 
   // Quests. Each chapter has 5 sections. Sections 1-4: beat 3 monsters, then a treasure
-  // chest opens. Section 5 is the chapter boss.
+  // chest opens. Section 5 is the chapter boss. Every enemy in a chapter is of that
+  // chapter's faction (which changes their ATK/HP the same way it does for cards).
   // dropWeights = chance weights for the card dropped from chests and boss battles.
   var CHAPTERS = [
-    { id: 1, name: 'The Verdant Frontier', element: 'wind',
+    { id: 1, name: 'The Verdant Frontier', faction: 'mortal', look: 'wind',
       enemies: [{ name: 'Thornback Boar', style: 'beast' }, { name: 'Moss Brigand', style: 'archer' },
                 { name: 'Wild Gale Hawk', style: 'beast' }, { name: 'Bramble Witch', style: 'mage' }],
       boss: { name: 'Elder Treant', style: 'tyrant' },
       dropWeights: { N: 70, R: 27, SR: 3, SSR: 0 } },
-    { id: 2, name: 'Cinder Peaks', element: 'fire',
+    { id: 2, name: 'Cinder Peaks', faction: 'fallen', look: 'fire',
       enemies: [{ name: 'Magma Crawler', style: 'beast' }, { name: 'Ash Raider', style: 'knight' },
                 { name: 'Smoldering Wisp', style: 'sprite' }, { name: 'Slag Golem', style: 'tyrant' }],
       boss: { name: 'Caldera Drake', style: 'dragon' },
       dropWeights: { N: 40, R: 45, SR: 14, SSR: 1 } },
-    { id: 3, name: 'The Hollow Sanctum', element: 'dark',
+    { id: 3, name: 'The Hollow Sanctum', faction: 'immortal', look: 'dark',
       enemies: [{ name: 'Grave Warden', style: 'knight' }, { name: 'Dusk Stalker', style: 'beast' },
                 { name: 'Hollow Priest', style: 'mage' }, { name: 'Wailing Shade', style: 'sprite' }],
       boss: { name: 'The Pale Regent', style: 'seraph' },
@@ -352,15 +362,22 @@ var GameData = (function () {
     monsterDropChance: 0.2,          // chance a defeated monster drops a card
     chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
     leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and HP
+    alignmentBonus: 1.15,            // cards matching your alignment: +15% ATK and HP
+    sameFactionFuseMult: 1.5,        // fusing a card of the same faction gives 1.5x exp
     pointsPerLevel: 3,               // attribute points you get on each level-up
     staminaPerPoint: 2,              // each Stamina point: +2 max stamina
     atkPctPerPoint: 2,               // each ATK PWR point: +2% team ATK
     hpPctPerPoint: 2,                // each DEF PWR point: +2% team HP
-    starterCards: ['cinder-archer', 'tide-caller', 'breeze-pixie', 'dawn-acolyte', 'shade-whelp']
+    // Starting cards depend on the alignment you pick.
+    starterCards: {
+      mortal:   ['cinder-archer', 'reed-skirmisher', 'dawn-acolyte', 'breeze-pixie', 'brook-sprite'],
+      immortal: ['lantern-cleric', 'tide-caller', 'brook-sprite', 'dawn-acolyte', 'ember-imp'],
+      fallen:   ['gloom-thief', 'hollow-reaver', 'ember-imp', 'shade-whelp', 'dawn-acolyte']
+    }
   };
 
   var api = {
-    ELEMENTS: ELEMENTS, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER,
+    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER,
     CARDS: CARDS, CARD_BY_ID: CARD_BY_ID, CHAPTERS: CHAPTERS,
     STAGES_PER_CHAPTER: STAGES_PER_CHAPTER, CONFIG: CONFIG
   };
@@ -378,7 +395,7 @@ var GameData = (function () {
  * game shows that image instead of this drawing.
  *
  * Art.card(cardDef)   -> SVG string for a card
- * Art.enemy(unit)     -> SVG string for an enemy (unit has name, element, style, boss)
+ * Art.enemy(unit)     -> SVG string for an enemy (unit has name, look, style, boss)
  */
 var Art = (function () {
   'use strict';
@@ -725,8 +742,9 @@ var Art = (function () {
   }
 
   var api = {
-    card: function (def) { return render({ id: def.id, element: def.element, style: def.style, rarity: def.rarity }); },
-    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.element, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R' }); },
+    // "look" picks the color scene (fire, water, wind, light, dark); it is art only.
+    card: function (def) { return render({ id: def.id, element: def.look, style: def.style, rarity: def.rarity }); },
+    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.look, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R' }); },
     render: render
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; }
@@ -802,7 +820,8 @@ var Game = (function () {
     opts = opts || {};
     var t = nowMs(opts.now);
     var state = {
-      version: 2,
+      version: 3,
+      alignment: D.FACTIONS[opts.alignment] ? opts.alignment : null,  // picked once at the start
       gems: CFG.startGems,
       gold: CFG.startGold,
       level: 1,
@@ -819,7 +838,7 @@ var Game = (function () {
       items: { cureWater: 0 },
       pulls: 0
     };
-    CFG.starterCards.forEach(function (id) {
+    (CFG.starterCards[state.alignment] || CFG.starterCards.mortal).forEach(function (id) {
       var c = addCard(state, id);
       state.deck.push(c.uid);
     });
@@ -866,6 +885,12 @@ var Game = (function () {
     if (state.stamina >= staminaCap(state)) { return { ok: false, error: 'Your stamina is already full.' }; }
     state.items.cureWater--;
     state.stamina = staminaCap(state);
+    return { ok: true };
+  }
+
+  function setAlignment(state, faction) {
+    if (!D.FACTIONS[faction]) { return { ok: false, error: 'Unknown alignment.' }; }
+    state.alignment = faction;
     return { ok: true };
   }
 
@@ -946,7 +971,7 @@ var Game = (function () {
     var def = D.CARD_BY_ID[material.cardId];
     var baseDef = D.CARD_BY_ID[base.cardId];
     var value = D.RARITIES[def.rarity].fuseExp * (1 + 0.2 * (material.level - 1)) * (1 + 0.5 * material.evo);
-    if (def.element === baseDef.element) { value *= 1.5; }
+    if (def.faction === baseDef.faction) { value *= CFG.sameFactionFuseMult; }
     return Math.round(value);
   }
 
@@ -1050,11 +1075,6 @@ var Game = (function () {
   }
 
   // ---------- quests ----------
-  function elementMult(attacker, defender) {
-    if (D.ELEMENTS[attacker].beats === defender) { return 1.5; }
-    if (D.ELEMENTS[defender].beats === attacker) { return 0.75; }
-    return 1;
-  }
 
   function stageList() {
     var list = [], gi = 0;
@@ -1102,26 +1122,28 @@ var Game = (function () {
     var ch = D.CHAPTERS[stage.chapter - 1];
     var power = (1 + 0.4 * stage.index) * (1 + 0.05 * (fightNo - 1));
     var count = stage.boss ? 4 : (stage.num >= 3 ? 3 : 2);
-    var elems = [ch.element, ch.element, 'light', 'water', 'fire', 'wind', 'dark'];
+    var f = D.FACTIONS[ch.faction];
     var list = [];
     for (var i = 0; i < count; i++) {
       var isBoss = stage.boss && i === 0;
       var def = isBoss ? ch.boss : ch.enemies[(stage.index + i + fightNo) % ch.enemies.length];
       var mult = isBoss ? 1.8 : 1;
-      var hp = Math.round(110 * power * mult);
+      var hp = Math.round(110 * power * mult * f.hpMod);
       list.push({
         name: def.name,
         style: def.style,
+        look: ch.look,
         boss: isBoss,
-        element: isBoss ? ch.element : elems[(stage.index + i + fightNo) % elems.length],
+        faction: ch.faction,
         hp: hp, maxHp: hp,
-        atk: Math.round(14 * power * (isBoss ? 1.5 : 1))
+        atk: Math.round(14 * power * (isBoss ? 1.5 : 1) * f.atkMod)
       });
     }
     return list;
   }
 
-  // Turns your party cards into battle units. The first card is the leader.
+  // Turns your party cards into battle units. The first card is the leader, and cards
+  // matching your alignment get the alignment bonus.
   function buildTeam(state, uids) {
     var bonus = teamBonus(state);
     return uids.map(function (uid, i) {
@@ -1129,11 +1151,13 @@ var Game = (function () {
       var def = D.CARD_BY_ID[c.cardId];
       var s = cardStats(c);
       var lead = (i === 0) ? CFG.leaderMult : 1;
-      var hp = Math.round(s.hp * lead * bonus.hp);
+      var aligned = def.faction === state.alignment;
+      var align = aligned ? CFG.alignmentBonus : 1;
+      var hp = Math.round(s.hp * lead * align * bonus.hp);
       return {
-        name: def.name, element: def.element, cardId: def.id, rarity: def.rarity, style: def.style,
-        level: c.level, evo: c.evo, leader: i === 0,
-        atk: Math.round(s.atk * lead * bonus.atk), hp: hp, maxHp: hp
+        name: def.name, faction: def.faction, look: def.look, cardId: def.id, rarity: def.rarity, style: def.style,
+        level: c.level, evo: c.evo, leader: i === 0, aligned: aligned,
+        atk: Math.round(s.atk * lead * align * bonus.atk), hp: hp, maxHp: hp
       };
     });
   }
@@ -1141,19 +1165,17 @@ var Game = (function () {
   function snapshot(units) { return units.map(function (u) { var c = {}; for (var k in u) { c[k] = u[k]; } return c; }); }
 
   // Runs a whole battle instantly and records every hit as an event, so the screen can
-  // replay it. Events: {t:'round', n}, {t:'hit', side:'p'|'e', from, to, dmg, mult, hp, dead}.
+  // replay it. Events: {t:'round', n}, {t:'hit', side:'p'|'e', from, to, dmg, hp, dead}.
   function simulateBattle(playerUnits, enemyUnits, rand) {
     rand = rand || Math.random;
     var log = [], events = [];
     function alive(side) { return side.filter(function (u) { return u.hp > 0; }); }
     function act(unit, side, mySide, targets, theirSide) {
       var tgt = targets[Math.floor(rand() * targets.length)];
-      var mult = elementMult(unit.element, tgt.element);
-      var dmg = Math.max(1, Math.round(unit.atk * mult * (0.9 + 0.2 * rand())));
+      var dmg = Math.max(1, Math.round(unit.atk * (0.9 + 0.2 * rand())));
       tgt.hp = Math.max(0, tgt.hp - dmg);
-      events.push({ t: 'hit', side: side, from: mySide.indexOf(unit), to: theirSide.indexOf(tgt), dmg: dmg, mult: mult, hp: tgt.hp, dead: tgt.hp === 0 });
-      log.push(unit.name + ' hits ' + tgt.name + ' for ' + dmg +
-        (mult > 1 ? ' (strong!)' : (mult < 1 ? ' (weak)' : '')) + (tgt.hp === 0 ? ' - defeated' : ''));
+      events.push({ t: 'hit', side: side, from: mySide.indexOf(unit), to: theirSide.indexOf(tgt), dmg: dmg, hp: tgt.hp, dead: tgt.hp === 0 });
+      log.push(unit.name + ' hits ' + tgt.name + ' for ' + dmg + (tgt.hp === 0 ? ' - defeated' : ''));
     }
     var rounds = 0;
     while (rounds < CFG.battleMaxRounds && alive(playerUnits).length && alive(enemyUnits).length) {
@@ -1305,7 +1327,8 @@ var Game = (function () {
       if (typeof out.attr[key] !== 'number' || !isFinite(out.attr[key])) { out.attr[key] = 0; }
     });
     if (typeof out.items.cureWater !== 'number' || !isFinite(out.items.cureWater)) { out.items.cureWater = 0; }
-    out.version = 2;
+    if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
+    out.version = 3;
     out.level = Math.max(1, Math.floor(out.level));
     return out;
   }
@@ -1315,13 +1338,13 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
-    spendPoint: spendPoint, useCureWater: useCureWater, teamBonus: teamBonus,
+    spendPoint: spendPoint, useCureWater: useCureWater, teamBonus: teamBonus, setAlignment: setAlignment,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
     deckCost: deckCost, setDeck: setDeck, bestDeck: bestDeck,
     fusePreview: fusePreview, fuse: fuse, evolveCost: evolveCost, canEvolve: canEvolve, evolve: evolve,
     sellValue: sellValue, sell: sell,
-    elementMult: elementMult, getStage: getStage, isUnlocked: isUnlocked, stageEnemies: stageEnemies,
+    getStage: getStage, isUnlocked: isUnlocked, stageEnemies: stageEnemies,
     sectionProgress: sectionProgress, nextFightNo: nextFightNo, battleInfo: battleInfo,
     buildTeam: buildTeam, simulateBattle: simulateBattle, fight: fight,
     serialize: serialize, deserialize: deserialize
@@ -1357,6 +1380,7 @@ var Game = (function () {
   var speed = 1;               // battle playback speed: 1, 2 or 4
   var skipping = false;
   var current = null;          // the battle result being replayed
+  var freshGame = false;       // true when there was no save, so picking an alignment deals starter cards
 
   // ---------- saving / loading ----------
   function save() {
@@ -1370,12 +1394,16 @@ var Game = (function () {
         if (s) { return s; }
       }
     } catch (e) { /* ignore */ }
+    freshGame = true;
     return G.newGame();
   }
 
   // ---------- tiny helpers ----------
   function el(id) { return document.getElementById(id); }
-  function icon(element) { return D.ELEMENTS[element].icon; }
+  function icon(faction) {
+    var f = D.FACTIONS[faction];
+    return '<span class="fx" style="color:' + f.color + '">' + f.icon + '</span>';
+  }
   function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
 
   function toast(msg) {
@@ -1435,7 +1463,7 @@ var Game = (function () {
       '<div class="art">' + artFor(def) + '</div>' +
       '<span class="rar">' + def.rarity + '</span>' +
       '<span class="lv">Lv' + card.level + stars + '</span>' + (extra || '') +
-      '<div class="info"><div class="nm">' + icon(def.element) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' HP ' + st.hp + '</div></div></div>';
+      '<div class="info"><div class="nm">' + icon(def.faction) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' HP ' + st.hp + '</div></div></div>';
   }
 
   function sortedCards(cards, mode) {
@@ -1449,7 +1477,9 @@ var Game = (function () {
       }
       if (mode === 'level') { return (b.level + b.evo * 100) - (a.level + a.evo * 100) || b.uid - a.uid; }
       if (mode === 'recent') { return b.uid - a.uid; }
-      if (mode === 'element') { return da.element < db.element ? -1 : da.element > db.element ? 1 : order.indexOf(db.rarity) - order.indexOf(da.rarity); }
+      if (mode === 'faction') {
+        return D.FACTION_ORDER.indexOf(da.faction) - D.FACTION_ORDER.indexOf(db.faction) || order.indexOf(db.rarity) - order.indexOf(da.rarity);
+      }
       var r = order.indexOf(db.rarity) - order.indexOf(da.rarity);
       return r || (b.level + b.evo * 100) - (a.level + a.evo * 100) || b.uid - a.uid;
     });
@@ -1501,17 +1531,16 @@ var Game = (function () {
     }
 
     D.CHAPTERS.forEach(function (ch) {
-      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' ' + icon(ch.element) + '</div>';
+      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' <span class="muted" style="font-weight:400;font-size:13px">' + icon(ch.faction) + ' ' + D.FACTIONS[ch.faction].name + ' foes</span></div>';
       G.STAGES.filter(function (s) { return s.chapter === ch.id; }).forEach(function (s) {
         var unlocked = G.isUnlocked(state, s.id);
         var cleared = !!state.cleared[s.id];
         var foes = G.stageEnemies(s, G.nextFightNo(state, s.id));
-        var icons = foes.map(function (f) { return icon(f.element); }).join('');
         html += '<div class="stage' + (unlocked ? '' : ' locked') + '">' +
           '<div class="grow"><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') +
           (cleared ? ' <span class="cleared">Cleared</span>' : '') + '</div>' +
           '<div class="pips">' + pips(G.sectionProgress(state, s.id), s.monsters) + '</div>' +
-          '<div class="muted">' + (s.boss ? 'Boss battle' : 'Monster ' + G.nextFightNo(state, s.id) + ' of ' + s.monsters) + ' ' + icons + ' · ' + s.staminaCost + ' stamina</div></div>' +
+          '<div class="muted">' + (s.boss ? 'Boss battle' : 'Monster ' + G.nextFightNo(state, s.id) + ' of ' + s.monsters) + ' \u00B7 ' + foes.length + ' foes \u00B7 ' + s.staminaCost + ' stamina</div></div>' +
           '<button class="btn small" data-action="enter" data-stage="' + s.id + '"' + (unlocked ? '' : ' disabled') + '>' + (s.boss ? 'Challenge' : 'Enter') + '</button></div>';
       });
     });
@@ -1521,7 +1550,7 @@ var Game = (function () {
   function renderCards() {
     var html = '<h2>Cards (' + state.cards.length + ')</h2><div class="row"><span class="muted">Sort</span>' +
       '<select data-action="sort">';
-    ['rarity', 'level', 'recent', 'element'].forEach(function (m) {
+    ['rarity', 'level', 'recent', 'faction'].forEach(function (m) {
       html += '<option value="' + m + '"' + (m === cardSort ? ' selected' : '') + '>' + m + '</option>';
     });
     html += '</select></div><h3>Tap a card to fuse, evolve or sell it</h3><div class="card-grid">';
@@ -1566,7 +1595,8 @@ var Game = (function () {
 
   function renderMore() {
     return '<h2>More</h2>' +
-      '<div class="panel"><b>Your character</b><p class="muted" style="margin:6px 0 0">Level ' + state.level + ' · ' + attrSummary() +
+      '<div class="panel"><b>Your character</b><p class="muted" style="margin:6px 0 0">Alignment: ' + (state.alignment ? icon(state.alignment) + ' ' + D.FACTIONS[state.alignment].name : 'not chosen') +
+      '<br>Level ' + state.level + ' \u00B7 ' + attrSummary() +
       '<br>Unspent attribute points: ' + state.attrPoints + ' (spend them on the Quests tab)</p></div>' +
       '<div class="panel"><b>Your own art</b><p class="muted">Every card has drawn placeholder art. To replace one, put an image named after the card id into <code>assets/cards/</code> (for example <code>assets/cards/ember-imp.png</code>) and reload. Card ids are listed in <code>js/data.js</code>.</p></div>' +
       '<div class="panel"><b>Save backup</b><p class="muted">Your game saves in this browser automatically. Copy the text below to back it up, or paste a backup and press Import.</p>' +
@@ -1577,6 +1607,7 @@ var Game = (function () {
       '<button class="btn small secondary" data-action="gems">+1000 gems</button>' +
       '<button class="btn small secondary" data-action="gold">+5000 gold</button>' +
       '<button class="btn small secondary" data-action="stamina-fill">Fill stamina</button>' +
+      '<button class="btn small secondary" data-action="align-open">Change alignment</button>' +
       '<button class="btn small danger" data-action="reset">Reset game</button></div></div>';
   }
 
@@ -1597,30 +1628,37 @@ var Game = (function () {
     });
   }
 
+  // ---------- alignment picker (first launch, old saves, or "Change alignment") ----------
+  function showAlignment() {
+    var html = '<div class="sc-head"><h2>Choose your alignment</h2></div><div class="sc-body">' +
+      '<p class="muted" style="margin-top:0">Cards of your alignment get +' + alignPct() + '% ATK and HP in battle. ' +
+      'You can still use cards of any faction.' + (freshGame ? ' Your starting cards depend on your choice.' : '') + '</p>';
+    D.FACTION_ORDER.forEach(function (fid) {
+      var f = D.FACTIONS[fid];
+      var showcase = D.CARDS.filter(function (c) { return c.faction === fid && c.rarity === 'SSR'; })[0];
+      html += '<div class="panel align-pick" style="border-left:4px solid ' + f.color + '">' +
+        '<div class="align-art"><div class="bu-card r-SSR"><div class="art">' + A.card(showcase) + '</div></div></div>' +
+        '<div class="grow"><b style="font-size:17px">' + icon(fid) + ' ' + f.name + '</b>' +
+        '<p class="muted" style="margin:4px 0 8px">' + f.blurb + '</p>' +
+        (freshGame ? '<p class="muted" style="margin:0 0 8px;font-size:12px">Starts with: ' +
+          D.CONFIG.starterCards[fid].map(function (id) { return D.CARD_BY_ID[id].name; }).join(', ') + '</p>' : '') +
+        '<button class="btn" data-action="align-pick" data-f="' + fid + '">' + (state.alignment === fid ? 'Keep ' : 'Choose ') + f.name + '</button></div></div>';
+    });
+    openScreen(html + '</div>');
+  }
+
   // ---------- party select screen ----------
   function foeHtml(u) {
     return '<div class="foe"><div class="bu-card r-' + (u.boss ? 'SSR' : 'R') + '"><div class="art">' + A.enemy(u) + '</div>' +
-      '<span class="bu-el">' + icon(u.element) + '</span><div class="bu-name">' + u.name + '</div></div></div>';
+      '<span class="bu-el">' + icon(u.faction) + '</span><div class="bu-name">' + u.name + '</div></div></div>';
   }
 
-  // Which element(s) deal the most damage to these enemies.
-  function bestElements(enemies) {
-    var best = [], bestScore = -1;
-    Object.keys(D.ELEMENTS).forEach(function (e) {
-      var score = enemies.reduce(function (s, f) { return s + G.elementMult(e, f.element); }, 0);
-      if (score > bestScore + 1e-9) { bestScore = score; best = [e]; }
-      else if (Math.abs(score - bestScore) < 1e-9) { best.push(e); }
-    });
-    return best;
+  // Cards matching your alignment get a bonus; mark them with a green arrow.
+  function advBadge(card) {
+    return D.CARD_BY_ID[card.cardId].faction === state.alignment ? '<span class="adv up">\u25B2</span>' : '';
   }
 
-  function advBadge(card, enemies) {
-    var def = D.CARD_BY_ID[card.cardId];
-    var avg = enemies.reduce(function (s, f) { return s + G.elementMult(def.element, f.element); }, 0) / enemies.length;
-    if (avg >= 1.15) { return '<span class="adv up">▲</span>'; }
-    if (avg <= 0.9) { return '<span class="adv down">▼</span>'; }
-    return '';
-  }
+  function alignPct() { return Math.round((D.CONFIG.alignmentBonus - 1) * 100); }
 
   function showParty(stageId, keep) {
     var info = G.battleInfo(state, stageId);
@@ -1642,13 +1680,16 @@ var Game = (function () {
     var team = G.buildTeam(state, party);
     var atk = team.reduce(function (s, u) { return s + u.atk; }, 0);
     var hp = team.reduce(function (s, u) { return s + u.maxHp; }, 0);
-    var tip = bestElements(info.enemies).map(function (e) { return icon(e) + ' ' + D.ELEMENTS[e].name; }).join(' or ');
+    var foeF = D.FACTIONS[info.enemies[0].faction];
+    var myF = D.FACTIONS[state.alignment];
+    var tip = 'These foes are ' + icon(info.enemies[0].faction) + ' ' + foeF.name + ' (' + foeF.blurb.split('.')[0].toLowerCase() + '). ' +
+      'Your ' + icon(state.alignment) + ' ' + myF.name + ' cards get +' + alignPct() + '% ATK and HP (\u25B2).';
     var reason = !party.length ? 'Pick at least one card' : (cost > cap ? 'Party cost is over the limit' : (!enough ? 'Need ' + st.staminaCost + ' stamina (you have ' + state.stamina + ')' : ''));
 
     var html = '<div class="sc-head"><button class="btn small secondary" data-action="party-back">‹ Back</button>' +
       '<h2>' + (st.boss ? 'Chapter ' + st.chapter + ' boss' : 'Section ' + st.id + ' · Monster ' + info.fightNo + ' of ' + info.monsters) + '</h2></div>' +
       '<div class="sc-body"><h3 style="margin-top:0">Enemies</h3><div class="foes">' + info.enemies.map(foeHtml).join('') + '</div>' +
-      '<p class="muted" style="text-align:center;margin:0 0 10px">' + tip + ' hits these foes hardest. ▲ = strong against them, ▼ = weak.</p>' +
+      '<p class="muted" style="text-align:center;margin:0 0 10px">' + tip + '</p>' +
       '<div class="row"><h3 style="margin:0">Your party</h3><span class="spacer"></span><span>Cost <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span></div>' +
       '<div class="slots" style="margin-top:6px">';
     for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
@@ -1660,7 +1701,7 @@ var Game = (function () {
       '<h3>Your cards</h3><div class="card-grid">';
     sortedCards(state.cards, 'power').forEach(function (cd) {
       var inP = party.indexOf(cd.uid) !== -1;
-      html += cardHtml(cd, inP ? 'selected' : '', 'data-action="party-toggle"', advBadge(cd, info.enemies));
+      html += cardHtml(cd, inP ? 'selected' : '', 'data-action="party-toggle"', advBadge(cd));
     });
     html += '</div></div><div class="sc-foot">' +
       '<button class="btn secondary" data-action="party-auto">Auto-fill</button>' +
@@ -1677,7 +1718,7 @@ var Game = (function () {
     var rar = side === 'p' ? u.rarity : (u.boss ? 'SSR' : 'R');
     return '<div class="bu' + (u.boss ? ' boss' : '') + '" data-side="' + side + '" data-i="' + i + '">' +
       '<div class="bu-card r-' + rar + '"><div class="art">' + svg + '</div>' +
-      '<span class="bu-el">' + icon(u.element) + '</span>' + (u.leader ? '<span class="bu-lead">★</span>' : '') +
+      '<span class="bu-el">' + icon(u.faction) + '</span>' + (u.leader ? '<span class="bu-lead">\u2605</span>' : '') +
       '<div class="bu-name">' + u.name + '</div></div>' +
       '<div class="hpbar"><i></i></div><div class="hpnum">' + u.hp + '</div></div>';
   }
@@ -1710,8 +1751,8 @@ var Game = (function () {
     var fr = field.getBoundingClientRect();
     var tr = targetEl.querySelector('.bu-card').getBoundingClientRect();
     var d = document.createElement('div');
-    d.className = 'dmg' + (e.mult > 1 ? ' strong' : (e.mult < 1 ? ' weak' : ''));
-    d.textContent = (e.mult > 1 ? '★ ' : '') + e.dmg;
+    d.className = 'dmg' + (e.dead ? ' strong' : '');
+    d.textContent = e.dmg;
     d.style.left = (tr.left - fr.left + tr.width / 2) + 'px';
     d.style.top = (tr.top - fr.top + tr.height / 2) + 'px';
     field.appendChild(d);
@@ -1723,7 +1764,7 @@ var Game = (function () {
     var run = battleRun;
     skipping = false;
     current = res;
-    var tint = D.ELEMENTS[D.CHAPTERS[res.stage.chapter - 1].element].color + '55';
+    var tint = D.FACTIONS[D.CHAPTERS[res.stage.chapter - 1].faction].color + '44';
     var html = '<div class="battle"><div class="b-top"><span class="round" id="b-round">Battle start</span>' +
       '<button data-action="speed" data-s="1">1x</button><button data-action="speed" data-s="2">2x</button>' +
       '<button data-action="speed" data-s="4">4x</button><button data-action="skip">Skip</button></div>' +
@@ -1762,7 +1803,7 @@ var Game = (function () {
         from.style.zIndex = 5;
         fc.style.transform = 'translate(' + (dx * 0.7) + 'px,' + (dy * 0.7) + 'px) scale(1.1)';
         el('b-log').textContent = names[e.side][e.from].name + ' hits ' + names[otherSide][e.to].name + ' for ' + e.dmg +
-          (e.mult > 1 ? ' - strong!' : (e.mult < 1 ? ' - weak' : ''));
+          (e.dead ? ' - defeated!' : '');
         await sleep(170 / speed);
         if (run !== battleRun) { return false; }
         to.classList.add('hit');
@@ -1804,7 +1845,7 @@ var Game = (function () {
     if (!res.win) {
       html += '<div class="res-title result-lose">Defeat</div>' +
         '<div class="res-sub">Your party was wiped out. No stamina was spent.</div>' +
-        '<div class="panel muted">Try a different party. Bring cards of the element that is strong against these enemies, level your cards up with Fuse, or spend your attribute points.</div>';
+        '<div class="panel muted">Try a different party. Bring more cards of your alignment, level your cards up with Fuse, or spend your attribute points.</div>';
       foot = '<button class="btn secondary" data-action="res-quests">Quests</button>' +
         '<button class="btn" data-action="res-party">Change party</button>';
     } else {
@@ -1846,7 +1887,8 @@ var Game = (function () {
     var inDeck = state.deck.indexOf(uid) !== -1;
     var html = '<div style="width:150px;margin:0 auto 10px">' + cardHtml(card) + '</div>' +
       '<h2 style="text-align:center">' + def.name + '</h2>' +
-      '<p class="muted" style="text-align:center">' + icon(def.element) + ' ' + D.ELEMENTS[def.element].name +
+      '<p class="muted" style="text-align:center">' + icon(def.faction) + ' ' + D.FACTIONS[def.faction].name +
+      (def.faction === state.alignment ? ' (your alignment, +' + alignPct() + '% in battle)' : '') +
       ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
       '<div class="panel">Level ' + card.level + ' / ' + st.maxLevel + (card.level < st.maxLevel ? ' &middot; exp ' + card.exp + ' / ' + G.cardExpToNext(card) : ' (max)') +
       '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; HP ' + st.hp + '</div>' +
@@ -1864,7 +1906,7 @@ var Game = (function () {
     fuseSel = fuseSel.filter(function (u) { return !!G.findCard(state, u); });
     var preview = G.fusePreview(state, baseUid, fuseSel);
     var html = '<h2>Fuse into ' + D.CARD_BY_ID[base.cardId].name + '</h2>' +
-      '<p class="muted">Pick cards to use up. Same-element cards give 1.5x exp. Cards in your deck are hidden.</p>' +
+      '<p class="muted">Pick cards to use up. Cards of the same faction give ' + D.CONFIG.sameFactionFuseMult + 'x exp. Cards in your deck are hidden.</p>' +
       '<div class="panel">Gain <b>' + preview.exp + '</b> exp &middot; costs <b>' + preview.gold + '</b> gold (you have ' + state.gold + ')</div>' +
       '<div class="card-grid">';
     var mats = sortedCards(state.cards, 'rarity').filter(function (c) { return c.uid !== baseUid && state.deck.indexOf(c.uid) === -1; });
@@ -1914,6 +1956,15 @@ var Game = (function () {
     var res;
     switch (name) {
       case 'close': closeModal(); break;
+
+      case 'align-open': showAlignment(); break;
+      case 'align-pick': {
+        var fid = node.getAttribute('data-f');
+        if (freshGame) { state = G.newGame({ alignment: fid }); freshGame = false; }
+        else { G.setAlignment(state, fid); }
+        save(); closeScreen(); toast('You are ' + D.FACTIONS[fid].name + '.');
+        break;
+      }
 
       // quests and battles
       case 'enter': {
@@ -2037,7 +2088,7 @@ var Game = (function () {
       case 'gold': state.gold += 5000; save(); render(); break;
       case 'stamina-fill': state.stamina = G.staminaCap(state); save(); render(); break;
       case 'reset': confirmModal('This deletes your whole game and starts over.', 'reset-confirm'); break;
-      case 'reset-confirm': state = G.newGame(); save(); closeModal(); render(); toast('Game reset.'); break;
+      case 'reset-confirm': state = G.newGame(); freshGame = true; save(); closeModal(); render(); showAlignment(); break;
     }
   }
 
@@ -2058,6 +2109,7 @@ var Game = (function () {
   state = load();
   G.regenStamina(state);
   render();
+  if (!state.alignment) { showAlignment(); }
   probeArt();
   setInterval(renderTopbar, 1000);
   window.addEventListener('beforeunload', save);

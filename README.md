@@ -18,12 +18,25 @@ packed into one file. (If you change the code, run `node build.js` to rebuild it
 > Use the same browser each time. Saves live inside the browser, so a different browser (or clearing
 > site data) starts a new game. Use **More > Show my save** to back your game up.
 
+## Factions and your alignment
+
+Every card belongs to one of three factions. There is **no damage weakness** between them; instead each leans a different way:
+
+| Faction | Leaning |
+| --- | --- |
+| **Mortal** | Balanced stats. Each card costs 1 less in your party. |
+| **Immortal** | The toughest cards: high HP, lower ATK. |
+| **Fallen** | The hardest hitters: high ATK, lower HP. |
+
+When you start a game you pick an **alignment**. Your starting cards come from it, and cards of your alignment get
+**+15% ATK and HP** in battle. You can still use any card. (More > Change alignment switches it later.)
+
 ## How a quest works
 
 1. **Quests tab > Enter.** Each chapter has 5 sections. Sections 1 to 4 are monsters, section 5 is the boss.
 2. **Pick your party.** Before every battle you choose up to 5 cards. The first card is the **leader** (+20% ATK and HP).
-   The screen shows the enemies, which element hits them hardest, and a green up arrow or red down arrow on each of
-   your cards that is strong or weak against them. Your party has a **cost limit** that grows as you level up.
+   The screen shows the enemies and their faction, and a green arrow marks your cards that match your alignment.
+   Your party has a **cost limit** that grows as you level up.
 3. **Watch the battle.** Both sides attack in rounds. Use 1x / 2x / 4x speed, or **Skip** to jump to the result.
 4. **Collect rewards.** Every win costs stamina and gives exp and gold, and monsters sometimes drop a card.
    After **3 monsters** a **treasure chest** opens (gold and a likely card) and the section is cleared.
@@ -44,8 +57,7 @@ Level-ups also refill your stamina.
 | **Summon** | Spend gems on random cards. A x10 summon always includes at least one Super Rare or better. Rates are shown on screen. |
 | **More** | Your attribute totals, save backup/import, a few testing buttons, and a reset. |
 
-Elements: Fire beats Wind, Wind beats Water, Water beats Fire. Light and Dark beat each other.
-Beating an element deals 1.5x damage; being weak to it deals 0.75x.
+Fusing a card of the same faction gives 1.5x exp.
 
 ## Art
 
@@ -68,8 +80,10 @@ to GitHub by accident. If you want art in the repo, you'd have to change `.gitig
 
 Most tweaks are one-line edits in **`js/data.js`**:
 
-- Add a card: add a line to `CARD_LIST`, like `['my-card', 'My Card', 'fire', 'SR', 'knight']`.
-  The last value picks the placeholder drawing: `sprite`, `archer`, `knight`, `mage`, `beast`, `dragon`, `seraph` or `tyrant`.
+- Add a card: add a line to `CARD_LIST`, like `['my-card', 'My Card', 'fallen', 'SR', 'knight', 'fire']`.
+  The faction is `mortal`, `immortal` or `fallen`. The last two values only pick the placeholder drawing:
+  a style (`sprite`, `archer`, `knight`, `mage`, `beast`, `dragon`, `seraph`, `tyrant`) and a color scene (`fire`, `water`, `wind`, `light`, `dark`).
+- Change how each faction leans: `FACTIONS`. The alignment bonus and starter cards: `CONFIG`.
 - Change summon rates, stamina speed, monsters per section, chest odds, leader bonus, attribute points and starter cards: `RARITIES` and `CONFIG`.
 - Rename chapters, monsters and bosses: `CHAPTERS`.
 

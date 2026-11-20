@@ -66,7 +66,8 @@ var Game = (function () {
     opts = opts || {};
     var t = nowMs(opts.now);
     var state = {
-      version: 2,
+      version: 3,
+      alignment: D.FACTIONS[opts.alignment] ? opts.alignment : null,  // picked once at the start
       gems: CFG.startGems,
       gold: CFG.startGold,
       level: 1,
@@ -83,7 +84,7 @@ var Game = (function () {
       items: { cureWater: 0 },
       pulls: 0
     };
-    CFG.starterCards.forEach(function (id) {
+    (CFG.starterCards[state.alignment] || CFG.starterCards.mortal).forEach(function (id) {
       var c = addCard(state, id);
       state.deck.push(c.uid);
     });
@@ -130,6 +131,12 @@ var Game = (function () {
     if (state.stamina >= staminaCap(state)) { return { ok: false, error: 'Your stamina is already full.' }; }
     state.items.cureWater--;
     state.stamina = staminaCap(state);
+    return { ok: true };
+  }
+
+  function setAlignment(state, faction) {
+    if (!D.FACTIONS[faction]) { return { ok: false, error: 'Unknown alignment.' }; }
+    state.alignment = faction;
     return { ok: true };
   }
 
@@ -210,7 +217,7 @@ var Game = (function () {
     var def = D.CARD_BY_ID[material.cardId];
     var baseDef = D.CARD_BY_ID[base.cardId];
     var value = D.RARITIES[def.rarity].fuseExp * (1 + 0.2 * (material.level - 1)) * (1 + 0.5 * material.evo);
-    if (def.element === baseDef.element) { value *= 1.5; }
+    if (def.faction === baseDef.faction) { value *= CFG.sameFactionFuseMult; }
     return Math.round(value);
   }
 
@@ -314,11 +321,6 @@ var Game = (function () {
   }
 
   // ---------- quests ----------
-  function elementMult(attacker, defender) {
-    if (D.ELEMENTS[attacker].beats === defender) { return 1.5; }
-    if (D.ELEMENTS[defender].beats === attacker) { return 0.75; }
-    return 1;
-  }
 
   function stageList() {
     var list = [], gi = 0;
@@ -366,26 +368,28 @@ var Game = (function () {
     var ch = D.CHAPTERS[stage.chapter - 1];
     var power = (1 + 0.4 * stage.index) * (1 + 0.05 * (fightNo - 1));
     var count = stage.boss ? 4 : (stage.num >= 3 ? 3 : 2);
-    var elems = [ch.element, ch.element, 'light', 'water', 'fire', 'wind', 'dark'];
+    var f = D.FACTIONS[ch.faction];
     var list = [];
     for (var i = 0; i < count; i++) {
       var isBoss = stage.boss && i === 0;
       var def = isBoss ? ch.boss : ch.enemies[(stage.index + i + fightNo) % ch.enemies.length];
       var mult = isBoss ? 1.8 : 1;
-      var hp = Math.round(110 * power * mult);
+      var hp = Math.round(110 * power * mult * f.hpMod);
       list.push({
         name: def.name,
         style: def.style,
+        look: ch.look,
         boss: isBoss,
-        element: isBoss ? ch.element : elems[(stage.index + i + fightNo) % elems.length],
+        faction: ch.faction,
         hp: hp, maxHp: hp,
-        atk: Math.round(14 * power * (isBoss ? 1.5 : 1))
+        atk: Math.round(14 * power * (isBoss ? 1.5 : 1) * f.atkMod)
       });
     }
     return list;
   }
 
-  // Turns your party cards into battle units. The first card is the leader.
+  // Turns your party cards into battle units. The first card is the leader, and cards
+  // matching your alignment get the alignment bonus.
   function buildTeam(state, uids) {
     var bonus = teamBonus(state);
     return uids.map(function (uid, i) {
@@ -393,11 +397,13 @@ var Game = (function () {
       var def = D.CARD_BY_ID[c.cardId];
       var s = cardStats(c);
       var lead = (i === 0) ? CFG.leaderMult : 1;
-      var hp = Math.round(s.hp * lead * bonus.hp);
+      var aligned = def.faction === state.alignment;
+      var align = aligned ? CFG.alignmentBonus : 1;
+      var hp = Math.round(s.hp * lead * align * bonus.hp);
       return {
-        name: def.name, element: def.element, cardId: def.id, rarity: def.rarity, style: def.style,
-        level: c.level, evo: c.evo, leader: i === 0,
-        atk: Math.round(s.atk * lead * bonus.atk), hp: hp, maxHp: hp
+        name: def.name, faction: def.faction, look: def.look, cardId: def.id, rarity: def.rarity, style: def.style,
+        level: c.level, evo: c.evo, leader: i === 0, aligned: aligned,
+        atk: Math.round(s.atk * lead * align * bonus.atk), hp: hp, maxHp: hp
       };
     });
   }
@@ -405,19 +411,17 @@ var Game = (function () {
   function snapshot(units) { return units.map(function (u) { var c = {}; for (var k in u) { c[k] = u[k]; } return c; }); }
 
   // Runs a whole battle instantly and records every hit as an event, so the screen can
-  // replay it. Events: {t:'round', n}, {t:'hit', side:'p'|'e', from, to, dmg, mult, hp, dead}.
+  // replay it. Events: {t:'round', n}, {t:'hit', side:'p'|'e', from, to, dmg, hp, dead}.
   function simulateBattle(playerUnits, enemyUnits, rand) {
     rand = rand || Math.random;
     var log = [], events = [];
     function alive(side) { return side.filter(function (u) { return u.hp > 0; }); }
     function act(unit, side, mySide, targets, theirSide) {
       var tgt = targets[Math.floor(rand() * targets.length)];
-      var mult = elementMult(unit.element, tgt.element);
-      var dmg = Math.max(1, Math.round(unit.atk * mult * (0.9 + 0.2 * rand())));
+      var dmg = Math.max(1, Math.round(unit.atk * (0.9 + 0.2 * rand())));
       tgt.hp = Math.max(0, tgt.hp - dmg);
-      events.push({ t: 'hit', side: side, from: mySide.indexOf(unit), to: theirSide.indexOf(tgt), dmg: dmg, mult: mult, hp: tgt.hp, dead: tgt.hp === 0 });
-      log.push(unit.name + ' hits ' + tgt.name + ' for ' + dmg +
-        (mult > 1 ? ' (strong!)' : (mult < 1 ? ' (weak)' : '')) + (tgt.hp === 0 ? ' - defeated' : ''));
+      events.push({ t: 'hit', side: side, from: mySide.indexOf(unit), to: theirSide.indexOf(tgt), dmg: dmg, hp: tgt.hp, dead: tgt.hp === 0 });
+      log.push(unit.name + ' hits ' + tgt.name + ' for ' + dmg + (tgt.hp === 0 ? ' - defeated' : ''));
     }
     var rounds = 0;
     while (rounds < CFG.battleMaxRounds && alive(playerUnits).length && alive(enemyUnits).length) {
@@ -569,7 +573,8 @@ var Game = (function () {
       if (typeof out.attr[key] !== 'number' || !isFinite(out.attr[key])) { out.attr[key] = 0; }
     });
     if (typeof out.items.cureWater !== 'number' || !isFinite(out.items.cureWater)) { out.items.cureWater = 0; }
-    out.version = 2;
+    if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
+    out.version = 3;
     out.level = Math.max(1, Math.floor(out.level));
     return out;
   }
@@ -579,13 +584,13 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
-    spendPoint: spendPoint, useCureWater: useCureWater, teamBonus: teamBonus,
+    spendPoint: spendPoint, useCureWater: useCureWater, teamBonus: teamBonus, setAlignment: setAlignment,
     cardStats: cardStats, maxLevel: maxLevel, cardExpToNext: cardExpToNext,
     rateTable: rateTable, summon: summon,
     deckCost: deckCost, setDeck: setDeck, bestDeck: bestDeck,
     fusePreview: fusePreview, fuse: fuse, evolveCost: evolveCost, canEvolve: canEvolve, evolve: evolve,
     sellValue: sellValue, sell: sell,
-    elementMult: elementMult, getStage: getStage, isUnlocked: isUnlocked, stageEnemies: stageEnemies,
+    getStage: getStage, isUnlocked: isUnlocked, stageEnemies: stageEnemies,
     sectionProgress: sectionProgress, nextFightNo: nextFightNo, battleInfo: battleInfo,
     buildTeam: buildTeam, simulateBattle: simulateBattle, fight: fight,
     serialize: serialize, deserialize: deserialize

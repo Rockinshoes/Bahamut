@@ -7,7 +7,7 @@
  * game shows that image instead of this drawing.
  *
  * Art.card(cardDef)   -> SVG string for a card
- * Art.enemy(unit)     -> SVG string for an enemy (unit has name, element, style, boss)
+ * Art.enemy(unit)     -> SVG string for an enemy (unit has name, look, style, boss)
  */
 var Art = (function () {
   'use strict';
@@ -354,8 +354,9 @@ var Art = (function () {
   }
 
   var api = {
-    card: function (def) { return render({ id: def.id, element: def.element, style: def.style, rarity: def.rarity }); },
-    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.element, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R' }); },
+    // "look" picks the color scene (fire, water, wind, light, dark); it is art only.
+    card: function (def) { return render({ id: def.id, element: def.look, style: def.style, rarity: def.rarity }); },
+    enemy: function (u) { return render({ id: 'foe-' + slug(u.name), element: u.look, style: u.style || 'beast', rarity: u.boss ? 'SSR' : 'R' }); },
     render: render
   };
   if (typeof module !== 'undefined' && module.exports) { module.exports = api; }

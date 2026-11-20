@@ -1,5 +1,5 @@
 /*
- * data.js - all the game's content: elements, rarities, cards, chapters.
+ * data.js - all the game's content: factions, rarities, cards, chapters.
  * Edit this file to add cards or change balance. No other file needs to change
  * when you add a card (just add a line to the CARD_LIST below).
  *
@@ -10,14 +10,18 @@
 var GameData = (function () {
   'use strict';
 
-  // Fire beats Wind, Wind beats Water, Water beats Fire. Light and Dark beat each other.
-  var ELEMENTS = {
-    fire:  { name: 'Fire',  icon: '🔥', color: '#e4572e', beats: 'wind',  atkMod: 1.1, hpMod: 0.9 },
-    water: { name: 'Water', icon: '💧', color: '#2e86e4', beats: 'fire',  atkMod: 0.9, hpMod: 1.1 },
-    wind:  { name: 'Wind',  icon: '🍃', color: '#3fb56b', beats: 'water', atkMod: 1.0, hpMod: 1.0 },
-    light: { name: 'Light', icon: '✨',       color: '#e8c547', beats: 'dark',  atkMod: 1.0, hpMod: 1.0 },
-    dark:  { name: 'Dark',  icon: '🌑', color: '#8e5bd6', beats: 'light', atkMod: 1.05, hpMod: 0.95 }
+  // Three factions, like the original's Man / God / Demon. There is no damage weakness
+  // between them. Each leans a different way, and cards matching the alignment you
+  // picked at the start get a bonus (CONFIG.alignmentBonus).
+  var FACTIONS = {
+    mortal:   { name: 'Mortal',   icon: '⚔', color: '#5fbf7f', atkMod: 1.0,  hpMod: 1.0,  costMod: -1,
+                blurb: 'Balanced fighters. Cost 1 less in your party.' },
+    immortal: { name: 'Immortal', icon: '✦', color: '#f0c75e', atkMod: 0.85, hpMod: 1.25, costMod: 0,
+                blurb: 'The toughest cards. High HP, lower ATK.' },
+    fallen:   { name: 'Fallen',   icon: '☠', color: '#c05bd6', atkMod: 1.25, hpMod: 0.85, costMod: 0,
+                blurb: 'The hardest hitters. High ATK, lower HP.' }
   };
+  var FACTION_ORDER = ['mortal', 'immortal', 'fallen'];
 
   // rate = percent chance per summon. cost = deck cost. fuseExp = exp this card gives when fused.
   var RARITIES = {
@@ -28,72 +32,73 @@ var GameData = (function () {
   };
   var RARITY_ORDER = ['N', 'R', 'SR', 'SSR'];
 
-  // [id, name, element, rarity, art style]
-  // Art styles used by the placeholder art: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
+  // [id, name, faction, rarity, art style, art look]
+  // Art styles: sprite, archer, knight, mage, beast, dragon, seraph, tyrant
+  // Art looks (color scene only, no effect on play): fire, water, wind, light, dark
   var CARD_LIST = [
-    ['ember-imp',         'Ember Imp',         'fire',  'N',   'sprite'],
-    ['cinder-archer',     'Cinder Archer',     'fire',  'R',   'archer'],
-    ['ashen-duelist',     'Ashen Duelist',     'fire',  'R',   'knight'],
-    ['flame-warden',      'Flame Warden',      'fire',  'SR',  'knight'],
-    ['pyre-sovereign',    'Pyre Sovereign',    'fire',  'SSR', 'dragon'],
+    ['dawn-acolyte',      'Dawn Acolyte',      'mortal',   'N',   'sprite', 'light'],
+    ['breeze-pixie',      'Breeze Pixie',      'mortal',   'N',   'sprite', 'wind'],
+    ['cinder-archer',     'Cinder Archer',     'mortal',   'R',   'archer', 'fire'],
+    ['reed-skirmisher',   'Reed Skirmisher',   'mortal',   'R',   'archer', 'wind'],
+    ['sunblade-paladin',  'Sunblade Paladin',  'mortal',   'R',   'knight', 'light'],
+    ['storm-falconer',    'Storm Falconer',    'mortal',   'R',   'beast',  'wind'],
+    ['flame-warden',      'Flame Warden',      'mortal',   'SR',  'knight', 'fire'],
+    ['tempest-leviathan', 'Tempest Leviathan', 'mortal',   'SSR', 'dragon', 'water'],
 
-    ['brook-sprite',      'Brook Sprite',      'water', 'N',   'sprite'],
-    ['tide-caller',       'Tide Caller',       'water', 'R',   'mage'],
-    ['frost-sentinel',    'Frost Sentinel',    'water', 'R',   'beast'],
-    ['abyss-knight',      'Abyss Knight',      'water', 'SR',  'tyrant'],
-    ['tempest-leviathan', 'Tempest Leviathan', 'water', 'SSR', 'dragon'],
+    ['brook-sprite',      'Brook Sprite',      'immortal', 'N',   'sprite', 'water'],
+    ['lantern-cleric',    'Lantern Cleric',    'immortal', 'R',   'mage',   'light'],
+    ['tide-caller',       'Tide Caller',       'immortal', 'R',   'mage',   'water'],
+    ['frost-sentinel',    'Frost Sentinel',    'immortal', 'R',   'beast',  'water'],
+    ['halo-seraph',       'Halo Seraph',       'immortal', 'SR',  'seraph', 'light'],
+    ['cyclone-dancer',    'Cyclone Dancer',    'immortal', 'SR',  'mage',   'wind'],
+    ['radiant-archon',    'Radiant Archon',    'immortal', 'SSR', 'seraph', 'light'],
+    ['skyfather-zephyr',  'Skyfather Zephyr',  'immortal', 'SSR', 'seraph', 'wind'],
 
-    ['breeze-pixie',      'Breeze Pixie',      'wind',  'N',   'sprite'],
-    ['reed-skirmisher',   'Reed Skirmisher',   'wind',  'R',   'archer'],
-    ['storm-falconer',    'Storm Falconer',    'wind',  'R',   'beast'],
-    ['cyclone-dancer',    'Cyclone Dancer',    'wind',  'SR',  'mage'],
-    ['skyfather-zephyr',  'Skyfather Zephyr',  'wind',  'SSR', 'seraph'],
-
-    ['dawn-acolyte',      'Dawn Acolyte',      'light', 'N',   'sprite'],
-    ['lantern-cleric',    'Lantern Cleric',    'light', 'R',   'mage'],
-    ['sunblade-paladin',  'Sunblade Paladin',  'light', 'R',   'knight'],
-    ['halo-seraph',       'Halo Seraph',       'light', 'SR',  'seraph'],
-    ['radiant-archon',    'Radiant Archon',    'light', 'SSR', 'seraph'],
-
-    ['shade-whelp',       'Shade Whelp',       'dark',  'N',   'sprite'],
-    ['gloom-thief',       'Gloom Thief',       'dark',  'R',   'archer'],
-    ['hollow-reaver',     'Hollow Reaver',     'dark',  'R',   'knight'],
-    ['night-sorceress',   'Night Sorceress',   'dark',  'SR',  'mage'],
-    ['void-tyrant',       'Void Tyrant',       'dark',  'SSR', 'tyrant']
+    ['ember-imp',         'Ember Imp',         'fallen',   'N',   'sprite', 'fire'],
+    ['shade-whelp',       'Shade Whelp',       'fallen',   'N',   'sprite', 'dark'],
+    ['ashen-duelist',     'Ashen Duelist',     'fallen',   'R',   'knight', 'fire'],
+    ['gloom-thief',       'Gloom Thief',       'fallen',   'R',   'archer', 'dark'],
+    ['hollow-reaver',     'Hollow Reaver',     'fallen',   'R',   'knight', 'dark'],
+    ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'mage',   'dark'],
+    ['abyss-knight',      'Abyss Knight',      'fallen',   'SR',  'tyrant', 'water'],
+    ['pyre-sovereign',    'Pyre Sovereign',    'fallen',   'SSR', 'dragon', 'fire'],
+    ['void-tyrant',       'Void Tyrant',       'fallen',   'SSR', 'tyrant', 'dark']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
     var r = RARITIES[c[3]];
-    var e = ELEMENTS[c[2]];
+    var f = FACTIONS[c[2]];
     return {
       id: c[0],
       name: c[1],
-      element: c[2],
+      faction: c[2],
       rarity: c[3],
       style: c[4],
-      atk: Math.round(r.atk * e.atkMod),
-      hp: Math.round(r.hp * e.hpMod),
-      cost: r.cost
+      look: c[5],
+      atk: Math.round(r.atk * f.atkMod),
+      hp: Math.round(r.hp * f.hpMod),
+      cost: r.cost + f.costMod
     };
   });
   var CARD_BY_ID = {};
   CARDS.forEach(function (c) { CARD_BY_ID[c.id] = c; });
 
   // Quests. Each chapter has 5 sections. Sections 1-4: beat 3 monsters, then a treasure
-  // chest opens. Section 5 is the chapter boss.
+  // chest opens. Section 5 is the chapter boss. Every enemy in a chapter is of that
+  // chapter's faction (which changes their ATK/HP the same way it does for cards).
   // dropWeights = chance weights for the card dropped from chests and boss battles.
   var CHAPTERS = [
-    { id: 1, name: 'The Verdant Frontier', element: 'wind',
+    { id: 1, name: 'The Verdant Frontier', faction: 'mortal', look: 'wind',
       enemies: [{ name: 'Thornback Boar', style: 'beast' }, { name: 'Moss Brigand', style: 'archer' },
                 { name: 'Wild Gale Hawk', style: 'beast' }, { name: 'Bramble Witch', style: 'mage' }],
       boss: { name: 'Elder Treant', style: 'tyrant' },
       dropWeights: { N: 70, R: 27, SR: 3, SSR: 0 } },
-    { id: 2, name: 'Cinder Peaks', element: 'fire',
+    { id: 2, name: 'Cinder Peaks', faction: 'fallen', look: 'fire',
       enemies: [{ name: 'Magma Crawler', style: 'beast' }, { name: 'Ash Raider', style: 'knight' },
                 { name: 'Smoldering Wisp', style: 'sprite' }, { name: 'Slag Golem', style: 'tyrant' }],
       boss: { name: 'Caldera Drake', style: 'dragon' },
       dropWeights: { N: 40, R: 45, SR: 14, SSR: 1 } },
-    { id: 3, name: 'The Hollow Sanctum', element: 'dark',
+    { id: 3, name: 'The Hollow Sanctum', faction: 'immortal', look: 'dark',
       enemies: [{ name: 'Grave Warden', style: 'knight' }, { name: 'Dusk Stalker', style: 'beast' },
                 { name: 'Hollow Priest', style: 'mage' }, { name: 'Wailing Shade', style: 'sprite' }],
       boss: { name: 'The Pale Regent', style: 'seraph' },
@@ -119,15 +124,22 @@ var GameData = (function () {
     monsterDropChance: 0.2,          // chance a defeated monster drops a card
     chestCardChance: 0.75,           // chance the chest holds a card (otherwise extra gold)
     leaderMult: 1.2,                 // the first card in your party is the leader: +20% ATK and HP
+    alignmentBonus: 1.15,            // cards matching your alignment: +15% ATK and HP
+    sameFactionFuseMult: 1.5,        // fusing a card of the same faction gives 1.5x exp
     pointsPerLevel: 3,               // attribute points you get on each level-up
     staminaPerPoint: 2,              // each Stamina point: +2 max stamina
     atkPctPerPoint: 2,               // each ATK PWR point: +2% team ATK
     hpPctPerPoint: 2,                // each DEF PWR point: +2% team HP
-    starterCards: ['cinder-archer', 'tide-caller', 'breeze-pixie', 'dawn-acolyte', 'shade-whelp']
+    // Starting cards depend on the alignment you pick.
+    starterCards: {
+      mortal:   ['cinder-archer', 'reed-skirmisher', 'dawn-acolyte', 'breeze-pixie', 'brook-sprite'],
+      immortal: ['lantern-cleric', 'tide-caller', 'brook-sprite', 'dawn-acolyte', 'ember-imp'],
+      fallen:   ['gloom-thief', 'hollow-reaver', 'ember-imp', 'shade-whelp', 'dawn-acolyte']
+    }
   };
 
   var api = {
-    ELEMENTS: ELEMENTS, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER,
+    FACTIONS: FACTIONS, FACTION_ORDER: FACTION_ORDER, RARITIES: RARITIES, RARITY_ORDER: RARITY_ORDER,
     CARDS: CARDS, CARD_BY_ID: CARD_BY_ID, CHAPTERS: CHAPTERS,
     STAGES_PER_CHAPTER: STAGES_PER_CHAPTER, CONFIG: CONFIG
   };

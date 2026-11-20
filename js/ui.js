@@ -24,6 +24,7 @@
   var speed = 1;               // battle playback speed: 1, 2 or 4
   var skipping = false;
   var current = null;          // the battle result being replayed
+  var freshGame = false;       // true when there was no save, so picking an alignment deals starter cards
 
   // ---------- saving / loading ----------
   function save() {
@@ -37,12 +38,16 @@
         if (s) { return s; }
       }
     } catch (e) { /* ignore */ }
+    freshGame = true;
     return G.newGame();
   }
 
   // ---------- tiny helpers ----------
   function el(id) { return document.getElementById(id); }
-  function icon(element) { return D.ELEMENTS[element].icon; }
+  function icon(faction) {
+    var f = D.FACTIONS[faction];
+    return '<span class="fx" style="color:' + f.color + '">' + f.icon + '</span>';
+  }
   function sleep(ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); }
 
   function toast(msg) {
@@ -102,7 +107,7 @@
       '<div class="art">' + artFor(def) + '</div>' +
       '<span class="rar">' + def.rarity + '</span>' +
       '<span class="lv">Lv' + card.level + stars + '</span>' + (extra || '') +
-      '<div class="info"><div class="nm">' + icon(def.element) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' HP ' + st.hp + '</div></div></div>';
+      '<div class="info"><div class="nm">' + icon(def.faction) + ' ' + def.name + '</div><div class="stat">ATK ' + st.atk + ' HP ' + st.hp + '</div></div></div>';
   }
 
   function sortedCards(cards, mode) {
@@ -116,7 +121,9 @@
       }
       if (mode === 'level') { return (b.level + b.evo * 100) - (a.level + a.evo * 100) || b.uid - a.uid; }
       if (mode === 'recent') { return b.uid - a.uid; }
-      if (mode === 'element') { return da.element < db.element ? -1 : da.element > db.element ? 1 : order.indexOf(db.rarity) - order.indexOf(da.rarity); }
+      if (mode === 'faction') {
+        return D.FACTION_ORDER.indexOf(da.faction) - D.FACTION_ORDER.indexOf(db.faction) || order.indexOf(db.rarity) - order.indexOf(da.rarity);
+      }
       var r = order.indexOf(db.rarity) - order.indexOf(da.rarity);
       return r || (b.level + b.evo * 100) - (a.level + a.evo * 100) || b.uid - a.uid;
     });
@@ -168,17 +175,16 @@
     }
 
     D.CHAPTERS.forEach(function (ch) {
-      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' ' + icon(ch.element) + '</div>';
+      html += '<div class="chapter-title">Chapter ' + ch.id + ': ' + ch.name + ' <span class="muted" style="font-weight:400;font-size:13px">' + icon(ch.faction) + ' ' + D.FACTIONS[ch.faction].name + ' foes</span></div>';
       G.STAGES.filter(function (s) { return s.chapter === ch.id; }).forEach(function (s) {
         var unlocked = G.isUnlocked(state, s.id);
         var cleared = !!state.cleared[s.id];
         var foes = G.stageEnemies(s, G.nextFightNo(state, s.id));
-        var icons = foes.map(function (f) { return icon(f.element); }).join('');
         html += '<div class="stage' + (unlocked ? '' : ' locked') + '">' +
           '<div class="grow"><div class="name">' + s.id + (s.boss ? ' <span class="badge boss">BOSS</span>' : '') +
           (cleared ? ' <span class="cleared">Cleared</span>' : '') + '</div>' +
           '<div class="pips">' + pips(G.sectionProgress(state, s.id), s.monsters) + '</div>' +
-          '<div class="muted">' + (s.boss ? 'Boss battle' : 'Monster ' + G.nextFightNo(state, s.id) + ' of ' + s.monsters) + ' ' + icons + ' · ' + s.staminaCost + ' stamina</div></div>' +
+          '<div class="muted">' + (s.boss ? 'Boss battle' : 'Monster ' + G.nextFightNo(state, s.id) + ' of ' + s.monsters) + ' \u00B7 ' + foes.length + ' foes \u00B7 ' + s.staminaCost + ' stamina</div></div>' +
           '<button class="btn small" data-action="enter" data-stage="' + s.id + '"' + (unlocked ? '' : ' disabled') + '>' + (s.boss ? 'Challenge' : 'Enter') + '</button></div>';
       });
     });
@@ -188,7 +194,7 @@
   function renderCards() {
     var html = '<h2>Cards (' + state.cards.length + ')</h2><div class="row"><span class="muted">Sort</span>' +
       '<select data-action="sort">';
-    ['rarity', 'level', 'recent', 'element'].forEach(function (m) {
+    ['rarity', 'level', 'recent', 'faction'].forEach(function (m) {
       html += '<option value="' + m + '"' + (m === cardSort ? ' selected' : '') + '>' + m + '</option>';
     });
     html += '</select></div><h3>Tap a card to fuse, evolve or sell it</h3><div class="card-grid">';
@@ -233,7 +239,8 @@
 
   function renderMore() {
     return '<h2>More</h2>' +
-      '<div class="panel"><b>Your character</b><p class="muted" style="margin:6px 0 0">Level ' + state.level + ' · ' + attrSummary() +
+      '<div class="panel"><b>Your character</b><p class="muted" style="margin:6px 0 0">Alignment: ' + (state.alignment ? icon(state.alignment) + ' ' + D.FACTIONS[state.alignment].name : 'not chosen') +
+      '<br>Level ' + state.level + ' \u00B7 ' + attrSummary() +
       '<br>Unspent attribute points: ' + state.attrPoints + ' (spend them on the Quests tab)</p></div>' +
       '<div class="panel"><b>Your own art</b><p class="muted">Every card has drawn placeholder art. To replace one, put an image named after the card id into <code>assets/cards/</code> (for example <code>assets/cards/ember-imp.png</code>) and reload. Card ids are listed in <code>js/data.js</code>.</p></div>' +
       '<div class="panel"><b>Save backup</b><p class="muted">Your game saves in this browser automatically. Copy the text below to back it up, or paste a backup and press Import.</p>' +
@@ -244,6 +251,7 @@
       '<button class="btn small secondary" data-action="gems">+1000 gems</button>' +
       '<button class="btn small secondary" data-action="gold">+5000 gold</button>' +
       '<button class="btn small secondary" data-action="stamina-fill">Fill stamina</button>' +
+      '<button class="btn small secondary" data-action="align-open">Change alignment</button>' +
       '<button class="btn small danger" data-action="reset">Reset game</button></div></div>';
   }
 
@@ -264,30 +272,37 @@
     });
   }
 
+  // ---------- alignment picker (first launch, old saves, or "Change alignment") ----------
+  function showAlignment() {
+    var html = '<div class="sc-head"><h2>Choose your alignment</h2></div><div class="sc-body">' +
+      '<p class="muted" style="margin-top:0">Cards of your alignment get +' + alignPct() + '% ATK and HP in battle. ' +
+      'You can still use cards of any faction.' + (freshGame ? ' Your starting cards depend on your choice.' : '') + '</p>';
+    D.FACTION_ORDER.forEach(function (fid) {
+      var f = D.FACTIONS[fid];
+      var showcase = D.CARDS.filter(function (c) { return c.faction === fid && c.rarity === 'SSR'; })[0];
+      html += '<div class="panel align-pick" style="border-left:4px solid ' + f.color + '">' +
+        '<div class="align-art"><div class="bu-card r-SSR"><div class="art">' + A.card(showcase) + '</div></div></div>' +
+        '<div class="grow"><b style="font-size:17px">' + icon(fid) + ' ' + f.name + '</b>' +
+        '<p class="muted" style="margin:4px 0 8px">' + f.blurb + '</p>' +
+        (freshGame ? '<p class="muted" style="margin:0 0 8px;font-size:12px">Starts with: ' +
+          D.CONFIG.starterCards[fid].map(function (id) { return D.CARD_BY_ID[id].name; }).join(', ') + '</p>' : '') +
+        '<button class="btn" data-action="align-pick" data-f="' + fid + '">' + (state.alignment === fid ? 'Keep ' : 'Choose ') + f.name + '</button></div></div>';
+    });
+    openScreen(html + '</div>');
+  }
+
   // ---------- party select screen ----------
   function foeHtml(u) {
     return '<div class="foe"><div class="bu-card r-' + (u.boss ? 'SSR' : 'R') + '"><div class="art">' + A.enemy(u) + '</div>' +
-      '<span class="bu-el">' + icon(u.element) + '</span><div class="bu-name">' + u.name + '</div></div></div>';
+      '<span class="bu-el">' + icon(u.faction) + '</span><div class="bu-name">' + u.name + '</div></div></div>';
   }
 
-  // Which element(s) deal the most damage to these enemies.
-  function bestElements(enemies) {
-    var best = [], bestScore = -1;
-    Object.keys(D.ELEMENTS).forEach(function (e) {
-      var score = enemies.reduce(function (s, f) { return s + G.elementMult(e, f.element); }, 0);
-      if (score > bestScore + 1e-9) { bestScore = score; best = [e]; }
-      else if (Math.abs(score - bestScore) < 1e-9) { best.push(e); }
-    });
-    return best;
+  // Cards matching your alignment get a bonus; mark them with a green arrow.
+  function advBadge(card) {
+    return D.CARD_BY_ID[card.cardId].faction === state.alignment ? '<span class="adv up">\u25B2</span>' : '';
   }
 
-  function advBadge(card, enemies) {
-    var def = D.CARD_BY_ID[card.cardId];
-    var avg = enemies.reduce(function (s, f) { return s + G.elementMult(def.element, f.element); }, 0) / enemies.length;
-    if (avg >= 1.15) { return '<span class="adv up">▲</span>'; }
-    if (avg <= 0.9) { return '<span class="adv down">▼</span>'; }
-    return '';
-  }
+  function alignPct() { return Math.round((D.CONFIG.alignmentBonus - 1) * 100); }
 
   function showParty(stageId, keep) {
     var info = G.battleInfo(state, stageId);
@@ -309,13 +324,16 @@
     var team = G.buildTeam(state, party);
     var atk = team.reduce(function (s, u) { return s + u.atk; }, 0);
     var hp = team.reduce(function (s, u) { return s + u.maxHp; }, 0);
-    var tip = bestElements(info.enemies).map(function (e) { return icon(e) + ' ' + D.ELEMENTS[e].name; }).join(' or ');
+    var foeF = D.FACTIONS[info.enemies[0].faction];
+    var myF = D.FACTIONS[state.alignment];
+    var tip = 'These foes are ' + icon(info.enemies[0].faction) + ' ' + foeF.name + ' (' + foeF.blurb.split('.')[0].toLowerCase() + '). ' +
+      'Your ' + icon(state.alignment) + ' ' + myF.name + ' cards get +' + alignPct() + '% ATK and HP (\u25B2).';
     var reason = !party.length ? 'Pick at least one card' : (cost > cap ? 'Party cost is over the limit' : (!enough ? 'Need ' + st.staminaCost + ' stamina (you have ' + state.stamina + ')' : ''));
 
     var html = '<div class="sc-head"><button class="btn small secondary" data-action="party-back">‹ Back</button>' +
       '<h2>' + (st.boss ? 'Chapter ' + st.chapter + ' boss' : 'Section ' + st.id + ' · Monster ' + info.fightNo + ' of ' + info.monsters) + '</h2></div>' +
       '<div class="sc-body"><h3 style="margin-top:0">Enemies</h3><div class="foes">' + info.enemies.map(foeHtml).join('') + '</div>' +
-      '<p class="muted" style="text-align:center;margin:0 0 10px">' + tip + ' hits these foes hardest. ▲ = strong against them, ▼ = weak.</p>' +
+      '<p class="muted" style="text-align:center;margin:0 0 10px">' + tip + '</p>' +
       '<div class="row"><h3 style="margin:0">Your party</h3><span class="spacer"></span><span>Cost <b class="' + (cost > cap ? 'cost-over' : 'cost-ok') + '">' + cost + ' / ' + cap + '</b></span></div>' +
       '<div class="slots" style="margin-top:6px">';
     for (var i = 0; i < D.CONFIG.maxDeckSize; i++) {
@@ -327,7 +345,7 @@
       '<h3>Your cards</h3><div class="card-grid">';
     sortedCards(state.cards, 'power').forEach(function (cd) {
       var inP = party.indexOf(cd.uid) !== -1;
-      html += cardHtml(cd, inP ? 'selected' : '', 'data-action="party-toggle"', advBadge(cd, info.enemies));
+      html += cardHtml(cd, inP ? 'selected' : '', 'data-action="party-toggle"', advBadge(cd));
     });
     html += '</div></div><div class="sc-foot">' +
       '<button class="btn secondary" data-action="party-auto">Auto-fill</button>' +
@@ -344,7 +362,7 @@
     var rar = side === 'p' ? u.rarity : (u.boss ? 'SSR' : 'R');
     return '<div class="bu' + (u.boss ? ' boss' : '') + '" data-side="' + side + '" data-i="' + i + '">' +
       '<div class="bu-card r-' + rar + '"><div class="art">' + svg + '</div>' +
-      '<span class="bu-el">' + icon(u.element) + '</span>' + (u.leader ? '<span class="bu-lead">★</span>' : '') +
+      '<span class="bu-el">' + icon(u.faction) + '</span>' + (u.leader ? '<span class="bu-lead">\u2605</span>' : '') +
       '<div class="bu-name">' + u.name + '</div></div>' +
       '<div class="hpbar"><i></i></div><div class="hpnum">' + u.hp + '</div></div>';
   }
@@ -377,8 +395,8 @@
     var fr = field.getBoundingClientRect();
     var tr = targetEl.querySelector('.bu-card').getBoundingClientRect();
     var d = document.createElement('div');
-    d.className = 'dmg' + (e.mult > 1 ? ' strong' : (e.mult < 1 ? ' weak' : ''));
-    d.textContent = (e.mult > 1 ? '★ ' : '') + e.dmg;
+    d.className = 'dmg' + (e.dead ? ' strong' : '');
+    d.textContent = e.dmg;
     d.style.left = (tr.left - fr.left + tr.width / 2) + 'px';
     d.style.top = (tr.top - fr.top + tr.height / 2) + 'px';
     field.appendChild(d);
@@ -390,7 +408,7 @@
     var run = battleRun;
     skipping = false;
     current = res;
-    var tint = D.ELEMENTS[D.CHAPTERS[res.stage.chapter - 1].element].color + '55';
+    var tint = D.FACTIONS[D.CHAPTERS[res.stage.chapter - 1].faction].color + '44';
     var html = '<div class="battle"><div class="b-top"><span class="round" id="b-round">Battle start</span>' +
       '<button data-action="speed" data-s="1">1x</button><button data-action="speed" data-s="2">2x</button>' +
       '<button data-action="speed" data-s="4">4x</button><button data-action="skip">Skip</button></div>' +
@@ -429,7 +447,7 @@
         from.style.zIndex = 5;
         fc.style.transform = 'translate(' + (dx * 0.7) + 'px,' + (dy * 0.7) + 'px) scale(1.1)';
         el('b-log').textContent = names[e.side][e.from].name + ' hits ' + names[otherSide][e.to].name + ' for ' + e.dmg +
-          (e.mult > 1 ? ' - strong!' : (e.mult < 1 ? ' - weak' : ''));
+          (e.dead ? ' - defeated!' : '');
         await sleep(170 / speed);
         if (run !== battleRun) { return false; }
         to.classList.add('hit');
@@ -471,7 +489,7 @@
     if (!res.win) {
       html += '<div class="res-title result-lose">Defeat</div>' +
         '<div class="res-sub">Your party was wiped out. No stamina was spent.</div>' +
-        '<div class="panel muted">Try a different party. Bring cards of the element that is strong against these enemies, level your cards up with Fuse, or spend your attribute points.</div>';
+        '<div class="panel muted">Try a different party. Bring more cards of your alignment, level your cards up with Fuse, or spend your attribute points.</div>';
       foot = '<button class="btn secondary" data-action="res-quests">Quests</button>' +
         '<button class="btn" data-action="res-party">Change party</button>';
     } else {
@@ -513,7 +531,8 @@
     var inDeck = state.deck.indexOf(uid) !== -1;
     var html = '<div style="width:150px;margin:0 auto 10px">' + cardHtml(card) + '</div>' +
       '<h2 style="text-align:center">' + def.name + '</h2>' +
-      '<p class="muted" style="text-align:center">' + icon(def.element) + ' ' + D.ELEMENTS[def.element].name +
+      '<p class="muted" style="text-align:center">' + icon(def.faction) + ' ' + D.FACTIONS[def.faction].name +
+      (def.faction === state.alignment ? ' (your alignment, +' + alignPct() + '% in battle)' : '') +
       ' &middot; ' + D.RARITIES[def.rarity].name + ' &middot; cost ' + st.cost + (inDeck ? ' &middot; in deck' : '') + '</p>' +
       '<div class="panel">Level ' + card.level + ' / ' + st.maxLevel + (card.level < st.maxLevel ? ' &middot; exp ' + card.exp + ' / ' + G.cardExpToNext(card) : ' (max)') +
       '<br>Evolution ' + card.evo + ' / ' + D.CONFIG.maxEvo + '<br>ATK ' + st.atk + ' &middot; HP ' + st.hp + '</div>' +
@@ -531,7 +550,7 @@
     fuseSel = fuseSel.filter(function (u) { return !!G.findCard(state, u); });
     var preview = G.fusePreview(state, baseUid, fuseSel);
     var html = '<h2>Fuse into ' + D.CARD_BY_ID[base.cardId].name + '</h2>' +
-      '<p class="muted">Pick cards to use up. Same-element cards give 1.5x exp. Cards in your deck are hidden.</p>' +
+      '<p class="muted">Pick cards to use up. Cards of the same faction give ' + D.CONFIG.sameFactionFuseMult + 'x exp. Cards in your deck are hidden.</p>' +
       '<div class="panel">Gain <b>' + preview.exp + '</b> exp &middot; costs <b>' + preview.gold + '</b> gold (you have ' + state.gold + ')</div>' +
       '<div class="card-grid">';
     var mats = sortedCards(state.cards, 'rarity').filter(function (c) { return c.uid !== baseUid && state.deck.indexOf(c.uid) === -1; });
@@ -581,6 +600,15 @@
     var res;
     switch (name) {
       case 'close': closeModal(); break;
+
+      case 'align-open': showAlignment(); break;
+      case 'align-pick': {
+        var fid = node.getAttribute('data-f');
+        if (freshGame) { state = G.newGame({ alignment: fid }); freshGame = false; }
+        else { G.setAlignment(state, fid); }
+        save(); closeScreen(); toast('You are ' + D.FACTIONS[fid].name + '.');
+        break;
+      }
 
       // quests and battles
       case 'enter': {
@@ -704,7 +732,7 @@
       case 'gold': state.gold += 5000; save(); render(); break;
       case 'stamina-fill': state.stamina = G.staminaCap(state); save(); render(); break;
       case 'reset': confirmModal('This deletes your whole game and starts over.', 'reset-confirm'); break;
-      case 'reset-confirm': state = G.newGame(); save(); closeModal(); render(); toast('Game reset.'); break;
+      case 'reset-confirm': state = G.newGame(); freshGame = true; save(); closeModal(); render(); showAlignment(); break;
     }
   }
 
@@ -725,6 +753,7 @@
   state = load();
   G.regenStamina(state);
   render();
+  if (!state.alignment) { showAlignment(); }
   probeArt();
   setInterval(renderTopbar, 1000);
   window.addEventListener('beforeunload', save);
