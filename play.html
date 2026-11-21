@@ -6,6 +6,8 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Bahamut Clone</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&display=swap">
   <style>
 :root {
   --bg: #14161f;
@@ -226,6 +228,61 @@ table.rates td { padding: 2px 12px 2px 0; }
 .tr.have { color: var(--accent); }
 
 .rar-tag { font-size: 10px; font-weight: 700; color: var(--muted); border: 1px solid var(--panel2); border-radius: 4px; padding: 0 3px; }
+
+/* ---------- Original-style look: dark ornate panels with gold trim ---------- */
+:root {
+  --gold: #d9b45a;
+  --gold-hi: #fff0b8;
+  --gold-lo: #7a5a1c;
+  --wine: #3a1420;
+  --ink: #0d0b12;
+  --serif: "Cinzel", "Trajan Pro", "Palatino Linotype", Georgia, serif;
+}
+body { background: radial-gradient(ellipse at 50% 0%, #2a1a2e 0%, var(--bg) 60%) fixed; }
+#topbar { background: linear-gradient(180deg, #2b1b25, #17121c); border-bottom: 2px solid var(--gold-lo);
+  box-shadow: inset 0 -1px 0 var(--gold), 0 2px 8px rgba(0,0,0,.6); }
+.stat .label { color: var(--gold); font-family: var(--serif); letter-spacing: .08em; }
+.bar.gold { height: 8px; margin: 4px 0 2px; background: #1a1210; border: 1px solid var(--gold-lo); }
+.bar.gold > div { background: linear-gradient(90deg, var(--gold-lo), var(--gold), var(--gold-hi)); }
+h2, .chapter-title, .res-title, .sc-head h2 { font-family: var(--serif); letter-spacing: .04em; }
+h2 { color: var(--gold-hi); text-shadow: 0 1px 0 #000, 0 0 12px rgba(217,180,90,.25); }
+h3 { font-family: var(--serif); color: var(--gold); letter-spacing: .05em; font-size: 14px; }
+.panel, .stage { background: linear-gradient(180deg, #221c2c, #17131e); border: 1px solid #4a3a2a;
+  box-shadow: inset 0 1px 0 rgba(255,240,184,.08), 0 2px 6px rgba(0,0,0,.4); }
+.chapter-title { color: var(--gold-hi); border-bottom: 1px solid var(--gold-lo); padding-bottom: 4px; }
+button.btn { background: linear-gradient(180deg, var(--gold-hi), var(--gold) 45%, #a77f2e); color: #2a1a05;
+  border: 1px solid #5a3e10; box-shadow: inset 0 1px 0 rgba(255,255,255,.6), 0 2px 4px rgba(0,0,0,.5); text-shadow: 0 1px 0 rgba(255,255,255,.4); }
+button.btn.secondary { background: linear-gradient(180deg, #4a3f5a, #2c2538); color: var(--text); border-color: #1a1522; text-shadow: none; }
+button.btn.danger { background: linear-gradient(180deg, #e46a5a, #9a2a20); color: #fff; text-shadow: none; }
+button.btn.wide { width: 100%; margin: 10px 0; }
+#tabs { background: linear-gradient(180deg, #241a22, #110d14); border-top: 2px solid var(--gold-lo); box-shadow: inset 0 1px 0 var(--gold); }
+#tabs button { font-size: 11px; padding: 6px 2px 8px; display: flex; flex-direction: column; align-items: center; gap: 1px; min-height: 52px; font-family: var(--serif); }
+#tabs button .ti { font-size: 18px; line-height: 1.1; }
+#tabs button.active { color: var(--gold-hi); border-top-color: var(--gold-hi); background: radial-gradient(ellipse at 50% 0%, rgba(217,180,90,.25), transparent 70%); }
+.sc-head, .sc-foot, .b-top, .b-log { background: linear-gradient(180deg, #2b1b25, #17121c); }
+
+/* My Page */
+.mypage-head { display: flex; gap: 12px; padding: 12px; border-radius: 12px; border: 1px solid var(--gold-lo);
+  background: linear-gradient(160deg, #3a2030, #1a1422 70%); box-shadow: inset 0 0 0 1px rgba(255,240,184,.12), 0 4px 12px rgba(0,0,0,.5); }
+.mp-leader { width: 118px; flex: none; }
+.mp-info { flex: 1; min-width: 0; }
+.mp-title { font-family: var(--serif); font-weight: 800; font-size: 18px; color: var(--gold-hi); }
+.mp-level { font-family: var(--serif); color: var(--text); }
+.mp-small { font-size: 11px; }
+.mp-stats { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.mp-stats td { padding: 2px 0; border-bottom: 1px dotted #4a3a2a; }
+.mp-stats td:first-child { color: var(--gold); font-family: var(--serif); font-size: 11px; letter-spacing: .05em; }
+.mp-stats td:last-child { text-align: right; }
+.mp-menu { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.mp-menu button { aspect-ratio: 1.3; border-radius: 10px; border: 1px solid var(--gold-lo); color: var(--gold-hi); font-family: var(--serif); font-size: 12px;
+  background: radial-gradient(circle at 50% 30%, #4a2a3a, #1a1320 75%); box-shadow: inset 0 1px 0 rgba(255,240,184,.2), 0 2px 6px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; }
+.mp-menu button span { font-size: 24px; color: var(--gold); text-shadow: 0 0 10px rgba(217,180,90,.5); }
+.present { border-color: var(--gold); }
+.present .gift { font-size: 28px; color: var(--gold-hi); margin-right: 4px; }
+details.panel summary { cursor: pointer; color: var(--gold); font-family: var(--serif); }
+.card.unknown { cursor: default; filter: grayscale(1) brightness(.4); }
+.card.unknown .art { background: repeating-linear-gradient(45deg, #222 0 8px, #1a1a1a 8px 16px); }
 </style>
 </head>
 <body>
@@ -243,11 +300,12 @@ table.rates td { padding: 2px 12px 2px 0; }
   <main id="view"></main>
 
   <nav id="tabs">
-    <button data-tab="quests" class="active">Quests</button>
-    <button data-tab="cards">Cards</button>
-    <button data-tab="deck">Deck</button>
-    <button data-tab="summon">Summon</button>
-    <button data-tab="more">More</button>
+    <button data-tab="mypage" class="active"><span class="ti">⌂</span>My Page</button>
+    <button data-tab="quests"><span class="ti">⚔</span>Quest</button>
+    <button data-tab="cards"><span class="ti">✦</span>Enhance</button>
+    <button data-tab="evolve"><span class="ti">⬆</span>Evolve</button>
+    <button data-tab="deck"><span class="ti">❖</span>Deck</button>
+    <button data-tab="summon"><span class="ti">★</span>Summon</button>
   </nav>
 
   <div id="screen" hidden></div>
@@ -343,6 +401,14 @@ var GameData = (function () {
     ['grand-sorcerer',    'Grand Sorcerer',    'mortal',   'SR',  'atk', 'mage',    'light', 'Arcane Storm',       'hit',   'def',  'all'],
     ['achilles',          'Achilles',          'mortal',   'SSR', 'atk', 'lancer',  'fire',  'Wrath of Achilles',  'boost', 'atk',  'mortal'],
     ['siegfried',         'Siegfried',         'mortal',   'L',   'bal', 'warrior', 'light', 'Dragonslayer',       'boost', 'both', 'all'],
+    ['squire',            'Squire',            'mortal',   'N',   'def', 'knight',  'light', 'Steadfast',          'boost', 'def',  'mortal'],
+    ['crossbowman',       'Crossbowman',       'mortal',   'HN',  'atk', 'archer',  'fire',  'Iron Bolt',          'hit',   'def',  'all'],
+    ['monk',              'Wandering Monk',    'mortal',   'HN',  'def', 'warrior', 'wind',  'Iron Body',          'boost', 'def',  'all'],
+    ['shieldmaiden',      'Shieldmaiden',      'mortal',   'R',   'def', 'lancer',  'water', 'Linked Shields',     'boost', 'def',  'mortal'],
+    ['ranger',            'Ranger',            'mortal',   'R',   'atk', 'archer',  'wind',  'Hunter\'s Mark',     'hit',   'def',  'fallen'],
+    ['battle-cleric',     'Battle Cleric',     'mortal',   'HR',  'bal', 'mage',    'light', 'Benediction',        'boost', 'both', 'mortal'],
+    ['beowulf',           'Beowulf',           'mortal',   'SR',  'atk', 'warrior', 'fire',  'Grendel\'s Bane',    'boost', 'atk',  'mortal'],
+    ['roland',            'Roland',            'mortal',   'SSR', 'bal', 'knight',  'light', 'Durendal',           'hit',   'def',  'all'],
 
     // ---- Immortal: gods, angels, fairies, celestial beasts and dragons
     ['sylph',             'Sylph',             'immortal', 'N',   'atk', 'sprite',  'wind',  'Gust',               'boost', 'atk',  'immortal'],
@@ -359,6 +425,14 @@ var GameData = (function () {
     ['xuanwu',            'Xuanwu',            'immortal', 'SR',  'def', 'beast',   'water', 'Black Tortoise Shell', 'boost', 'def', 'all'],
     ['qinglong',          'Qinglong',          'immortal', 'SSR', 'atk', 'serpent', 'water', 'Azure Tempest',      'boost', 'atk',  'immortal'],
     ['odin',              'Odin',              'immortal', 'L',   'bal', 'lancer',  'light', 'Gungnir',            'boost', 'both', 'all'],
+    ['pixie',             'Pixie',             'immortal', 'N',   'atk', 'sprite',  'wind',  'Twinkle Dust',       'hit',   'atk',  'all'],
+    ['cherub',            'Cherub',            'immortal', 'N',   'def', 'sprite',  'light', 'Little Grace',       'boost', 'def',  'immortal'],
+    ['unicorn',           'Unicorn',           'immortal', 'HN',  'bal', 'beast',   'light', 'Pure Horn',          'boost', 'both', 'all'],
+    ['muse',              'Muse',              'immortal', 'R',   'atk', 'mage',    'wind',  'Inspiration',        'boost', 'atk',  'all'],
+    ['thor',              'Thor',              'immortal', 'HR',  'atk', 'warrior', 'water', 'Mjolnir',            'hit',   'def',  'all'],
+    ['athena',            'Athena',            'immortal', 'SR',  'def', 'lancer',  'light', 'Aegis of Wisdom',    'boost', 'def',  'immortal'],
+    ['phoenix',           'Phoenix',           'immortal', 'SSR', 'atk', 'beast',   'fire',  'Rebirth Flame',      'boost', 'atk',  'immortal'],
+    ['zeus',              'Zeus',              'immortal', 'L',   'atk', 'mage',    'light', 'Thunderbolt',        'hit',   'def',  'all'],
 
     // ---- Fallen: demons, monsters, undead and chaos dragons
     ['goblin',            'Goblin',            'fallen',   'N',   'atk', 'sprite',  'dark',  'Ambush',             'boost', 'atk',  'fallen'],
@@ -374,7 +448,15 @@ var GameData = (function () {
     ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'bal', 'mage',    'dark',  'Shadow Hex',         'boost', 'both', 'fallen'],
     ['medusa',            'Medusa',            'fallen',   'SR',  'atk', 'mage',    'water', 'Stone Gaze',         'hit',   'def',  'all'],
     ['tiamat',            'Tiamat',            'fallen',   'SSR', 'atk', 'dragon',  'fire',  'Primordial Chaos',   'boost', 'atk',  'fallen'],
-    ['asmodeus',          'Asmodeus',          'fallen',   'L',   'bal', 'tyrant',  'dark',  'Infernal Crown',     'boost', 'both', 'all']
+    ['asmodeus',          'Asmodeus',          'fallen',   'L',   'bal', 'tyrant',  'dark',  'Infernal Crown',     'boost', 'both', 'all'],
+    ['kobold',            'Kobold',            'fallen',   'N',   'atk', 'sprite',  'fire',  'Scrap Blade',        'boost', 'atk',  'fallen'],
+    ['harpy',             'Harpy',             'fallen',   'N',   'atk', 'sprite',  'wind',  'Shriek',             'hit',   'atk',  'all'],
+    ['banshee',           'Banshee',           'fallen',   'HN',  'def', 'mage',    'dark',  'Mourning Wail',      'hit',   'atk',  'all'],
+    ['werewolf',          'Werewolf',          'fallen',   'R',   'atk', 'beast',   'dark',  'Feral Howl',         'boost', 'atk',  'fallen'],
+    ['lich',              'Lich',              'fallen',   'HR',  'bal', 'mage',    'dark',  'Phylactery',         'boost', 'both', 'fallen'],
+    ['cerberus',          'Cerberus',          'fallen',   'SR',  'atk', 'beast',   'fire',  'Three Heads',        'hit',   'def',  'all'],
+    ['jormungand',        'Jormungand',        'fallen',   'SSR', 'def', 'dragon',  'water', 'World Coil',         'boost', 'def',  'all'],
+    ['beelzebub',         'Beelzebub',         'fallen',   'L',   'atk', 'tyrant',  'fire',  'Lord of Flies',      'hit',   'both', 'all']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
@@ -444,7 +526,25 @@ var GameData = (function () {
               ['greatsword-maiden', 'hermes', 'minotaur'], ['berserker', 'pegasus', 'chimera']],
       bossDrops: ['grand-sorcerer', 'xuanwu', 'medusa'],
       treasure: { name: 'Regalia of the Sanctum', reward: 'SSR',
-        pieces: ['Cloud Key', 'Guardian\'s Plume', 'Lion\'s Mane', 'Oracle\'s Eye', 'Judgment Scale', 'Sanctum Seal'] } }
+        pieces: ['Cloud Key', 'Guardian\'s Plume', 'Lion\'s Mane', 'Oracle\'s Eye', 'Judgment Scale', 'Sanctum Seal'] } },
+    { id: 4, name: 'The Shadow Marsh', faction: 'fallen', look: 'dark',
+      enemies: [{ name: 'Marsh Harpy', style: 'sprite' }, { name: 'Bog Werewolf', style: 'beast' },
+                { name: 'Drowned Banshee', style: 'mage' }, { name: 'Mire Ghoul', style: 'warrior' }],
+      boss: { name: 'Hydra', style: 'dragon' },
+      drops: [['squire', 'pixie', 'kobold'], ['crossbowman', 'cherub', 'harpy'],
+              ['monk', 'unicorn', 'banshee'], ['shieldmaiden', 'muse', 'werewolf']],
+      bossDrops: ['battle-cleric', 'thor', 'lich'],
+      treasure: { name: 'Relics of the Marsh', reward: 'SR',
+        pieces: ['Harpy Talon', 'Wolf Pelt', 'Banshee\'s Veil', 'Bog Lantern', 'Hydra Fang', 'Marsh Seal'] } },
+    { id: 5, name: 'The Iron Citadel', faction: 'mortal', look: 'fire',
+      enemies: [{ name: 'Citadel Guard', style: 'knight' }, { name: 'Crossbow Sentry', style: 'archer' },
+                { name: 'War Mage', style: 'mage' }, { name: 'Pike Captain', style: 'lancer' }],
+      boss: { name: 'Iron Warlord', style: 'warrior' },
+      drops: [['ranger', 'muse', 'werewolf'], ['battle-cleric', 'thor', 'lich'],
+              ['high-lancer', 'freyja', 'vampire-countess'], ['greatsword-maiden', 'hermes', 'minotaur']],
+      bossDrops: ['beowulf', 'athena', 'cerberus'],
+      treasure: { name: 'Arms of the Citadel', reward: 'SSR',
+        pieces: ['Guard\'s Badge', 'Sentry Quiver', 'Mage\'s Codex', 'Captain\'s Pike', 'Warlord\'s Helm', 'Citadel Seal'] } }
   ];
   var STAGES_PER_CHAPTER = 5;
 
@@ -462,6 +562,8 @@ var GameData = (function () {
     evolveGoldBase: 500,             // multiplied by (current evo + 1)
     firstClearGems: 30,
     firstClearBossGems: 100,
+    dailyGems: 30,                   // the daily present on My Page
+    dailyAmbrosia: 1,
     battleMaxRounds: 40,
     damagePerAtk: 0.2,               // each hit deals ATK x 0.2 (+/-10%) to the target's DEF
     expPerStamina: 1,                // quests give exp equal to the stamina spent, like the original
@@ -1432,7 +1534,8 @@ var Game = (function () {
       attr: { stamina: 0, atk: 0 },
       attrPoints: 0,
       items: { ambrosia: 0 },
-      treasure: {},          // chapter id -> [count of piece 1, ..., count of piece 6]
+      treasure: {},
+      lastPresent: '',       // the day (YYYY-MM-DD) the daily present was last collected          // chapter id -> [count of piece 1, ..., count of piece 6]
       pulls: 0
     };
     (CFG.starterCards[state.alignment] || CFG.starterCards.mortal).forEach(function (id) {
@@ -1484,6 +1587,21 @@ var Game = (function () {
     state.items.ambrosia--;
     state.stamina = staminaCap(state);
     return { ok: true };
+  }
+
+  // ---------- daily present ----------
+  // Like the original's presents box on My Page: once a day, a gift waits to be collected.
+  function dayKey(now) {
+    var d = new Date(nowMs(now));
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function presentReady(state, now) { return state.lastPresent !== dayKey(now); }
+  function claimPresent(state, now) {
+    if (!presentReady(state, now)) { return { ok: false, error: 'Today\'s present is already collected. Come back tomorrow.' }; }
+    state.lastPresent = dayKey(now);
+    state.gems += CFG.dailyGems;
+    state.items.ambrosia += CFG.dailyAmbrosia;
+    return { ok: true, gems: CFG.dailyGems, ambrosia: CFG.dailyAmbrosia };
   }
 
   function setAlignment(state, faction) {
@@ -2027,6 +2145,7 @@ var Game = (function () {
       var t = out.treasure[k];
       if (!Array.isArray(t) || t.length !== 6) { delete out.treasure[k]; }
     });
+    if (typeof out.lastPresent !== 'string') { out.lastPresent = ''; }
     if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
     out.version = 3;
     out.level = Math.max(1, Math.floor(out.level));
@@ -2038,6 +2157,7 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
+    presentReady: presentReady, claimPresent: claimPresent,
     spendPoint: spendPoint, useAmbrosia: useAmbrosia, setAlignment: setAlignment,
     skillPct: skillPct, skillText: skillText, skillTitle: skillTitle, applySkills: applySkills, sectionDrops: sectionDrops,
     treasureCounts: treasureCounts, treasureComplete: treasureComplete, claimTreasure: claimTreasure, stagePieces: stagePieces,
@@ -2071,7 +2191,7 @@ var Game = (function () {
   var A = Art;
 
   var state = null;
-  var currentTab = 'quests';
+  var currentTab = 'mypage';
   var cardSort = 'rarity';
   var fuseSel = [];            // card uids picked as fusion material
   var toastTimer = null;
@@ -2260,6 +2380,9 @@ var Game = (function () {
       '<div class="bar" style="height:7px;margin-top:6px"><div style="width:' + Math.min(100, state.exp / need * 100) + '%"></div></div></div>';
 
     if (state.attrPoints > 0) {
+      html += '<div class="panel pts row"><span class="grow"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b></span><button class="btn small" data-action="goto" data-tab="mypage">My Page</button></div>';
+    }
+    if (false) {
       html += '<div class="panel pts"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b>' +
         '<div class="row wrap" style="margin-top:8px">' +
         '<button class="btn small" data-action="point" data-kind="stamina">Stamina +' + D.CONFIG.staminaPerPoint + '</button>' +
@@ -2298,12 +2421,12 @@ var Game = (function () {
   }
 
   function renderCards() {
-    var html = '<h2>Cards (' + state.cards.length + ')</h2><div class="row"><span class="muted">Sort</span>' +
+    var html = '<h2>Enhance <span class="muted" style="font-size:14px">' + state.cards.length + ' cards</span></h2><div class="row"><span class="muted">Sort</span>' +
       '<select data-action="sort">';
     ['rarity', 'level', 'recent', 'faction'].forEach(function (m) {
       html += '<option value="' + m + '"' + (m === cardSort ? ' selected' : '') + '>' + m + '</option>';
     });
-    html += '</select></div><h3>Tap a card to fuse, evolve or sell it</h3><div class="card-grid">';
+    html += '</select></div><h3>Tap a card to enhance it with other cards, evolve or sell it</h3><div class="card-grid">';
     sortedCards(state.cards, cardSort).forEach(function (c) {
       html += cardHtml(c, '', 'data-action="card-open"');
     });
@@ -2343,12 +2466,102 @@ var Game = (function () {
     return html + '</table><p class="muted">Total summons: ' + state.pulls + '. Earn more gems by clearing sections for the first time and by levelling up.</p>';
   }
 
-  function renderMore() {
-    return '<h2>More</h2>' +
-      '<div class="panel"><b>Your character</b><p class="muted" style="margin:6px 0 0">Alignment: ' + (state.alignment ? icon(state.alignment) + ' ' + D.FACTIONS[state.alignment].name : 'not chosen') +
-      '<br>Level ' + state.level + ' \u00B7 ' + attrSummary() +
-      '<br>Unspent attribute points: ' + state.attrPoints + ' (spend them on the Quests tab)</p></div>' +
-      '<div class="panel"><b>Your own art</b><p class="muted">Every card has drawn placeholder art. To replace one, put an image named after the card id into <code>assets/cards/</code> (for example <code>assets/cards/ember-imp.png</code>) and reload. Card ids are listed in <code>js/data.js</code>.</p></div>' +
+  // The next section to play: the first unlocked one not yet cleared (or the last one).
+  function nextSection() {
+    for (var i = 0; i < G.STAGES.length; i++) {
+      var st = G.STAGES[i];
+      if (G.isUnlocked(state, st.id) && !state.cleared[st.id]) { return st; }
+    }
+    return G.STAGES[G.STAGES.length - 1];
+  }
+
+  // My Page: the player's home, like the original's.
+  function renderMyPage() {
+    var need = G.expToNext(state.level);
+    var leader = state.deck.length ? G.findCard(state, state.deck[0]) : null;
+    var team = G.buildTeam(state, state.deck);
+    var atk = team.reduce(function (s, u) { return s + u.atk; }, 0), def = team.reduce(function (s, u) { return s + u.maxHp; }, 0);
+    var f = state.alignment ? D.FACTIONS[state.alignment] : null;
+    var next = nextSection();
+    var html = '<div class="mypage-head">' +
+      '<div class="mp-leader">' + (leader ? cardHtml(leader, '', 'data-action="card-open"', '<span class="lead">LEADER</span>') : '') + '</div>' +
+      '<div class="mp-info"><div class="mp-title">' + (f ? icon(state.alignment) + ' ' + f.name : 'Summoner') + '</div>' +
+      '<div class="mp-level">Level <b>' + state.level + '</b></div>' +
+      '<div class="bar gold"><div style="width:' + Math.min(100, state.exp / need * 100) + '%"></div></div>' +
+      '<div class="muted mp-small">' + state.exp + ' / ' + need + ' exp to next level</div>' +
+      '<table class="mp-stats"><tr><td>Stamina</td><td>' + state.stamina + ' / ' + G.staminaCap(state) + '</td></tr>' +
+      '<tr><td>ATK PWR</td><td>' + G.deckCost(state, state.deck) + ' / ' + G.deckCostCap(state) + '</td></tr>' +
+      '<tr><td>Party</td><td>ATK ' + atk + ' \u00B7 DEF ' + def + '</td></tr>' +
+      '<tr><td>Cards</td><td>' + state.cards.length + '</td></tr></table></div></div>';
+
+    html += '<button class="btn big wide" data-action="enter" data-stage="' + next.id + '">\u2694 Continue quest: ' + next.id + ' ' + D.CHAPTERS[next.chapter - 1].name + '</button>';
+
+    if (G.presentReady(state)) {
+      html += '<div class="panel present row"><span class="gift">\u2709</span><span class="grow"><b>A present has arrived!</b><br><span class="muted">' +
+        D.CONFIG.dailyGems + ' gems and ' + D.CONFIG.dailyAmbrosia + ' Ambrosia, once a day</span></span>' +
+        '<button class="btn small" data-action="present">Collect</button></div>';
+    }
+    if (state.attrPoints > 0) {
+      html += '<div class="panel pts"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b>' +
+        '<div class="row wrap" style="margin-top:8px">' +
+        '<button class="btn small" data-action="point" data-kind="stamina">Stamina +' + D.CONFIG.staminaPerPoint + '</button>' +
+        '<button class="btn small" data-action="point" data-kind="atk">ATK PWR +' + D.CONFIG.atkPowerPerPoint + '</button></div>' +
+        '<div class="muted" style="margin-top:6px;font-size:12px">Stamina lets you quest longer; ATK PWR is the most total card cost your party can have.</div></div>';
+    }
+    if (state.items.ambrosia > 0) {
+      html += '<div class="panel row"><span class="grow"><b>Ambrosia x' + state.items.ambrosia + '</b><br><span class="muted">Refills all your stamina</span></span>' +
+        '<button class="btn small" data-action="ambrosia"' + (state.stamina >= G.staminaCap(state) ? ' disabled' : '') + '>Use</button></div>';
+    }
+    html += '<div class="mp-menu">' +
+      '<button data-action="goto" data-tab="quests"><span>\u2694</span>Quest</button>' +
+      '<button data-action="goto" data-tab="cards"><span>\u2726</span>Enhance</button>' +
+      '<button data-action="goto" data-tab="evolve"><span>\u2b06</span>Evolve</button>' +
+      '<button data-action="goto" data-tab="deck"><span>\u2756</span>Deck</button>' +
+      '<button data-action="goto" data-tab="summon"><span>\u2605</span>Summon</button>' +
+      '<button data-action="goto" data-tab="collection"><span>\u2637</span>Collection</button></div>';
+    html += '<details class="panel"><summary><b>Settings and save</b></summary>' + renderSettings() + '</details>';
+    return html;
+  }
+
+  // Evolve: cards at max level with a spare copy, like the original's Evolve menu.
+  function renderEvolve() {
+    var ready = [], waiting = [];
+    sortedCards(state.cards, 'rarity').forEach(function (c) {
+      if (c.evo >= D.CONFIG.maxEvo) { return; }
+      var copies = state.cards.filter(function (o) { return o.cardId === c.cardId && o.uid !== c.uid && state.deck.indexOf(o.uid) === -1; }).length;
+      if (!copies) { return; }
+      (c.level >= G.maxLevel(c) ? ready : waiting).push(c);
+    });
+    var html = '<h2>Evolve</h2><p class="muted">Combine a card at max level with another copy of the same card. It evolves to its next form: +30% stats and +10 to its level cap.</p>';
+    html += '<h3>Ready to evolve (' + ready.length + ')</h3>';
+    html += ready.length ? '<div class="card-grid">' + ready.map(function (c) { return cardHtml(c, '', 'data-action="evolve-open"'); }).join('') + '</div>'
+      : '<p class="muted">None yet. Level a card to its cap with Enhance while holding a second copy.</p>';
+    html += '<h3>Have a copy, need levels (' + waiting.length + ')</h3>';
+    html += waiting.length ? '<div class="card-grid">' + waiting.map(function (c) {
+      return cardHtml(c, 'dim', 'data-action="card-open"', '<span class="lead">Lv ' + c.level + '/' + G.maxLevel(c) + '</span>');
+    }).join('') + '</div>' : '<p class="muted">No cards with a spare copy.</p>';
+    return html;
+  }
+
+  // Collection: every card in the game, found or not.
+  function renderCollection() {
+    var owned = {};
+    state.cards.forEach(function (c) { owned[c.cardId] = true; });
+    var count = Object.keys(owned).length;
+    var html = '<h2>Collection <span class="muted" style="font-size:14px">' + count + ' / ' + D.CARDS.length + '</span></h2>';
+    D.FACTION_ORDER.forEach(function (fid) {
+      html += '<h3>' + icon(fid) + ' ' + D.FACTIONS[fid].name + '</h3><div class="card-grid">';
+      D.CARDS.filter(function (c) { return c.faction === fid; }).forEach(function (def) {
+        var fake = { uid: 0, cardId: def.id, level: 1, exp: 0, evo: 0 };
+        html += owned[def.id] ? cardHtml(fake) : '<div class="card r-' + def.rarity + ' unknown"><div class="art"></div><span class="rar">' + def.rarity + '</span><div class="info"><div class="nm">???</div></div></div>';
+      });
+      html += '</div>';
+    });
+    return html;
+  }
+
+  function renderSettings() {
+    return '<p class="muted" style="margin:8px 0 0">Alignment: ' + (state.alignment ? icon(state.alignment) + ' ' + D.FACTIONS[state.alignment].name : 'not chosen') + ' \u00B7 ' + attrSummary() + '</p>' +
       '<div class="panel"><b>Save backup</b><p class="muted">Your game saves in this browser automatically. Copy the text below to back it up, or paste a backup and press Import.</p>' +
       '<textarea id="save-box" spellcheck="false"></textarea><div class="row wrap" style="margin-top:8px">' +
       '<button class="btn small secondary" data-action="export">Show my save</button>' +
@@ -2368,9 +2581,11 @@ var Game = (function () {
     var html = '';
     if (currentTab === 'quests') { html = renderQuests(); }
     else if (currentTab === 'cards') { html = renderCards(); }
+    else if (currentTab === 'evolve') { html = renderEvolve(); }
     else if (currentTab === 'deck') { html = renderDeck(); }
     else if (currentTab === 'summon') { html = renderSummon(); }
-    else { html = renderMore(); }
+    else if (currentTab === 'collection') { html = renderCollection(); }
+    else { html = renderMyPage(); }
     view.innerHTML = html;
     view.scrollTop = scroll;
     Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b) {
@@ -2671,7 +2886,7 @@ var Game = (function () {
       '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br>' + G.skillTitle(def) + ' <span class="muted">(' + G.skillText(def) + ')</span>' +
       '<br><span class="muted" style="font-size:12px">Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
       '<div class="row wrap">' +
-      '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Fuse</button>' +
+      '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Enhance</button>' +
       '<button class="btn" data-action="evolve-open" data-uid="' + uid + '">Evolve</button>' +
       '<button class="btn danger" data-action="sell-card" data-uid="' + uid + '"' + (inDeck ? ' disabled' : '') + '>Sell (' + G.sellValue(card) + ' gold)</button>' +
       '<span class="spacer"></span><button class="btn secondary" data-action="close">Close</button></div>';
@@ -2683,7 +2898,7 @@ var Game = (function () {
     if (!base) { closeModal(); return; }
     fuseSel = fuseSel.filter(function (u) { return !!G.findCard(state, u); });
     var preview = G.fusePreview(state, baseUid, fuseSel);
-    var html = '<h2>Fuse into ' + D.CARD_BY_ID[base.cardId].name + '</h2>' +
+    var html = '<h2>Enhance ' + D.CARD_BY_ID[base.cardId].name + '</h2>' +
       '<p class="muted">Pick cards to use up. Cards of the same faction give ' + D.CONFIG.sameFactionFuseMult + 'x exp. Cards in your deck are hidden.</p>' +
       '<div class="panel">Gain <b>' + preview.exp + '</b> exp &middot; costs <b>' + preview.gold + '</b> gold (you have ' + state.gold + ')</div>' +
       '<div class="card-grid">';
@@ -2692,7 +2907,7 @@ var Game = (function () {
       html += cardHtml(c, fuseSel.indexOf(c.uid) !== -1 ? 'selected' : '', 'data-action="fuse-toggle" data-base="' + baseUid + '"');
     });
     if (!mats.length) { html += '<p class="muted">No spare cards. Clear quests or summon more.</p>'; }
-    html += '</div><p class="row"><button class="btn" data-action="fuse-confirm" data-uid="' + baseUid + '"' + (fuseSel.length ? '' : ' disabled') + '>Fuse</button>' +
+    html += '</div><p class="row"><button class="btn" data-action="fuse-confirm" data-uid="' + baseUid + '"' + (fuseSel.length ? '' : ' disabled') + '>Enhance</button>' +
       '<button class="btn secondary" data-action="card-open" data-uid="' + baseUid + '">Back</button></p>';
     openModal(html);
   }
@@ -2734,6 +2949,12 @@ var Game = (function () {
     var res;
     switch (name) {
       case 'close': closeModal(); break;
+      case 'goto': currentTab = node.getAttribute('data-tab'); el('view').scrollTop = 0; render(); break;
+      case 'present':
+        res = G.claimPresent(state);
+        if (!res.ok) { toast(res.error); break; }
+        save(); render(); toast('Collected ' + res.gems + ' gems and ' + res.ambrosia + ' Ambrosia.');
+        break;
 
       case 'align-open': showAlignment(); break;
       case 'align-pick': {

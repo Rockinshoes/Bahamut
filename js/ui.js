@@ -13,7 +13,7 @@
   var A = Art;
 
   var state = null;
-  var currentTab = 'quests';
+  var currentTab = 'mypage';
   var cardSort = 'rarity';
   var fuseSel = [];            // card uids picked as fusion material
   var toastTimer = null;
@@ -202,6 +202,9 @@
       '<div class="bar" style="height:7px;margin-top:6px"><div style="width:' + Math.min(100, state.exp / need * 100) + '%"></div></div></div>';
 
     if (state.attrPoints > 0) {
+      html += '<div class="panel pts row"><span class="grow"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b></span><button class="btn small" data-action="goto" data-tab="mypage">My Page</button></div>';
+    }
+    if (false) {
       html += '<div class="panel pts"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b>' +
         '<div class="row wrap" style="margin-top:8px">' +
         '<button class="btn small" data-action="point" data-kind="stamina">Stamina +' + D.CONFIG.staminaPerPoint + '</button>' +
@@ -240,12 +243,12 @@
   }
 
   function renderCards() {
-    var html = '<h2>Cards (' + state.cards.length + ')</h2><div class="row"><span class="muted">Sort</span>' +
+    var html = '<h2>Enhance <span class="muted" style="font-size:14px">' + state.cards.length + ' cards</span></h2><div class="row"><span class="muted">Sort</span>' +
       '<select data-action="sort">';
     ['rarity', 'level', 'recent', 'faction'].forEach(function (m) {
       html += '<option value="' + m + '"' + (m === cardSort ? ' selected' : '') + '>' + m + '</option>';
     });
-    html += '</select></div><h3>Tap a card to fuse, evolve or sell it</h3><div class="card-grid">';
+    html += '</select></div><h3>Tap a card to enhance it with other cards, evolve or sell it</h3><div class="card-grid">';
     sortedCards(state.cards, cardSort).forEach(function (c) {
       html += cardHtml(c, '', 'data-action="card-open"');
     });
@@ -285,12 +288,102 @@
     return html + '</table><p class="muted">Total summons: ' + state.pulls + '. Earn more gems by clearing sections for the first time and by levelling up.</p>';
   }
 
-  function renderMore() {
-    return '<h2>More</h2>' +
-      '<div class="panel"><b>Your character</b><p class="muted" style="margin:6px 0 0">Alignment: ' + (state.alignment ? icon(state.alignment) + ' ' + D.FACTIONS[state.alignment].name : 'not chosen') +
-      '<br>Level ' + state.level + ' \u00B7 ' + attrSummary() +
-      '<br>Unspent attribute points: ' + state.attrPoints + ' (spend them on the Quests tab)</p></div>' +
-      '<div class="panel"><b>Your own art</b><p class="muted">Every card has drawn placeholder art. To replace one, put an image named after the card id into <code>assets/cards/</code> (for example <code>assets/cards/ember-imp.png</code>) and reload. Card ids are listed in <code>js/data.js</code>.</p></div>' +
+  // The next section to play: the first unlocked one not yet cleared (or the last one).
+  function nextSection() {
+    for (var i = 0; i < G.STAGES.length; i++) {
+      var st = G.STAGES[i];
+      if (G.isUnlocked(state, st.id) && !state.cleared[st.id]) { return st; }
+    }
+    return G.STAGES[G.STAGES.length - 1];
+  }
+
+  // My Page: the player's home, like the original's.
+  function renderMyPage() {
+    var need = G.expToNext(state.level);
+    var leader = state.deck.length ? G.findCard(state, state.deck[0]) : null;
+    var team = G.buildTeam(state, state.deck);
+    var atk = team.reduce(function (s, u) { return s + u.atk; }, 0), def = team.reduce(function (s, u) { return s + u.maxHp; }, 0);
+    var f = state.alignment ? D.FACTIONS[state.alignment] : null;
+    var next = nextSection();
+    var html = '<div class="mypage-head">' +
+      '<div class="mp-leader">' + (leader ? cardHtml(leader, '', 'data-action="card-open"', '<span class="lead">LEADER</span>') : '') + '</div>' +
+      '<div class="mp-info"><div class="mp-title">' + (f ? icon(state.alignment) + ' ' + f.name : 'Summoner') + '</div>' +
+      '<div class="mp-level">Level <b>' + state.level + '</b></div>' +
+      '<div class="bar gold"><div style="width:' + Math.min(100, state.exp / need * 100) + '%"></div></div>' +
+      '<div class="muted mp-small">' + state.exp + ' / ' + need + ' exp to next level</div>' +
+      '<table class="mp-stats"><tr><td>Stamina</td><td>' + state.stamina + ' / ' + G.staminaCap(state) + '</td></tr>' +
+      '<tr><td>ATK PWR</td><td>' + G.deckCost(state, state.deck) + ' / ' + G.deckCostCap(state) + '</td></tr>' +
+      '<tr><td>Party</td><td>ATK ' + atk + ' \u00B7 DEF ' + def + '</td></tr>' +
+      '<tr><td>Cards</td><td>' + state.cards.length + '</td></tr></table></div></div>';
+
+    html += '<button class="btn big wide" data-action="enter" data-stage="' + next.id + '">\u2694 Continue quest: ' + next.id + ' ' + D.CHAPTERS[next.chapter - 1].name + '</button>';
+
+    if (G.presentReady(state)) {
+      html += '<div class="panel present row"><span class="gift">\u2709</span><span class="grow"><b>A present has arrived!</b><br><span class="muted">' +
+        D.CONFIG.dailyGems + ' gems and ' + D.CONFIG.dailyAmbrosia + ' Ambrosia, once a day</span></span>' +
+        '<button class="btn small" data-action="present">Collect</button></div>';
+    }
+    if (state.attrPoints > 0) {
+      html += '<div class="panel pts"><b>' + state.attrPoints + ' attribute point' + (state.attrPoints === 1 ? '' : 's') + ' to spend</b>' +
+        '<div class="row wrap" style="margin-top:8px">' +
+        '<button class="btn small" data-action="point" data-kind="stamina">Stamina +' + D.CONFIG.staminaPerPoint + '</button>' +
+        '<button class="btn small" data-action="point" data-kind="atk">ATK PWR +' + D.CONFIG.atkPowerPerPoint + '</button></div>' +
+        '<div class="muted" style="margin-top:6px;font-size:12px">Stamina lets you quest longer; ATK PWR is the most total card cost your party can have.</div></div>';
+    }
+    if (state.items.ambrosia > 0) {
+      html += '<div class="panel row"><span class="grow"><b>Ambrosia x' + state.items.ambrosia + '</b><br><span class="muted">Refills all your stamina</span></span>' +
+        '<button class="btn small" data-action="ambrosia"' + (state.stamina >= G.staminaCap(state) ? ' disabled' : '') + '>Use</button></div>';
+    }
+    html += '<div class="mp-menu">' +
+      '<button data-action="goto" data-tab="quests"><span>\u2694</span>Quest</button>' +
+      '<button data-action="goto" data-tab="cards"><span>\u2726</span>Enhance</button>' +
+      '<button data-action="goto" data-tab="evolve"><span>\u2b06</span>Evolve</button>' +
+      '<button data-action="goto" data-tab="deck"><span>\u2756</span>Deck</button>' +
+      '<button data-action="goto" data-tab="summon"><span>\u2605</span>Summon</button>' +
+      '<button data-action="goto" data-tab="collection"><span>\u2637</span>Collection</button></div>';
+    html += '<details class="panel"><summary><b>Settings and save</b></summary>' + renderSettings() + '</details>';
+    return html;
+  }
+
+  // Evolve: cards at max level with a spare copy, like the original's Evolve menu.
+  function renderEvolve() {
+    var ready = [], waiting = [];
+    sortedCards(state.cards, 'rarity').forEach(function (c) {
+      if (c.evo >= D.CONFIG.maxEvo) { return; }
+      var copies = state.cards.filter(function (o) { return o.cardId === c.cardId && o.uid !== c.uid && state.deck.indexOf(o.uid) === -1; }).length;
+      if (!copies) { return; }
+      (c.level >= G.maxLevel(c) ? ready : waiting).push(c);
+    });
+    var html = '<h2>Evolve</h2><p class="muted">Combine a card at max level with another copy of the same card. It evolves to its next form: +30% stats and +10 to its level cap.</p>';
+    html += '<h3>Ready to evolve (' + ready.length + ')</h3>';
+    html += ready.length ? '<div class="card-grid">' + ready.map(function (c) { return cardHtml(c, '', 'data-action="evolve-open"'); }).join('') + '</div>'
+      : '<p class="muted">None yet. Level a card to its cap with Enhance while holding a second copy.</p>';
+    html += '<h3>Have a copy, need levels (' + waiting.length + ')</h3>';
+    html += waiting.length ? '<div class="card-grid">' + waiting.map(function (c) {
+      return cardHtml(c, 'dim', 'data-action="card-open"', '<span class="lead">Lv ' + c.level + '/' + G.maxLevel(c) + '</span>');
+    }).join('') + '</div>' : '<p class="muted">No cards with a spare copy.</p>';
+    return html;
+  }
+
+  // Collection: every card in the game, found or not.
+  function renderCollection() {
+    var owned = {};
+    state.cards.forEach(function (c) { owned[c.cardId] = true; });
+    var count = Object.keys(owned).length;
+    var html = '<h2>Collection <span class="muted" style="font-size:14px">' + count + ' / ' + D.CARDS.length + '</span></h2>';
+    D.FACTION_ORDER.forEach(function (fid) {
+      html += '<h3>' + icon(fid) + ' ' + D.FACTIONS[fid].name + '</h3><div class="card-grid">';
+      D.CARDS.filter(function (c) { return c.faction === fid; }).forEach(function (def) {
+        var fake = { uid: 0, cardId: def.id, level: 1, exp: 0, evo: 0 };
+        html += owned[def.id] ? cardHtml(fake) : '<div class="card r-' + def.rarity + ' unknown"><div class="art"></div><span class="rar">' + def.rarity + '</span><div class="info"><div class="nm">???</div></div></div>';
+      });
+      html += '</div>';
+    });
+    return html;
+  }
+
+  function renderSettings() {
+    return '<p class="muted" style="margin:8px 0 0">Alignment: ' + (state.alignment ? icon(state.alignment) + ' ' + D.FACTIONS[state.alignment].name : 'not chosen') + ' \u00B7 ' + attrSummary() + '</p>' +
       '<div class="panel"><b>Save backup</b><p class="muted">Your game saves in this browser automatically. Copy the text below to back it up, or paste a backup and press Import.</p>' +
       '<textarea id="save-box" spellcheck="false"></textarea><div class="row wrap" style="margin-top:8px">' +
       '<button class="btn small secondary" data-action="export">Show my save</button>' +
@@ -310,9 +403,11 @@
     var html = '';
     if (currentTab === 'quests') { html = renderQuests(); }
     else if (currentTab === 'cards') { html = renderCards(); }
+    else if (currentTab === 'evolve') { html = renderEvolve(); }
     else if (currentTab === 'deck') { html = renderDeck(); }
     else if (currentTab === 'summon') { html = renderSummon(); }
-    else { html = renderMore(); }
+    else if (currentTab === 'collection') { html = renderCollection(); }
+    else { html = renderMyPage(); }
     view.innerHTML = html;
     view.scrollTop = scroll;
     Array.prototype.forEach.call(document.querySelectorAll('#tabs button'), function (b) {
@@ -613,7 +708,7 @@
       '<div class="panel"><b>Skill: ' + def.skill.name + '</b><br>' + G.skillTitle(def) + ' <span class="muted">(' + G.skillText(def) + ')</span>' +
       '<br><span class="muted" style="font-size:12px">Triggers at the start of battle: always in party slot 1, less often in later slots.</span></div>' +
       '<div class="row wrap">' +
-      '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Fuse</button>' +
+      '<button class="btn" data-action="fuse-open" data-uid="' + uid + '">Enhance</button>' +
       '<button class="btn" data-action="evolve-open" data-uid="' + uid + '">Evolve</button>' +
       '<button class="btn danger" data-action="sell-card" data-uid="' + uid + '"' + (inDeck ? ' disabled' : '') + '>Sell (' + G.sellValue(card) + ' gold)</button>' +
       '<span class="spacer"></span><button class="btn secondary" data-action="close">Close</button></div>';
@@ -625,7 +720,7 @@
     if (!base) { closeModal(); return; }
     fuseSel = fuseSel.filter(function (u) { return !!G.findCard(state, u); });
     var preview = G.fusePreview(state, baseUid, fuseSel);
-    var html = '<h2>Fuse into ' + D.CARD_BY_ID[base.cardId].name + '</h2>' +
+    var html = '<h2>Enhance ' + D.CARD_BY_ID[base.cardId].name + '</h2>' +
       '<p class="muted">Pick cards to use up. Cards of the same faction give ' + D.CONFIG.sameFactionFuseMult + 'x exp. Cards in your deck are hidden.</p>' +
       '<div class="panel">Gain <b>' + preview.exp + '</b> exp &middot; costs <b>' + preview.gold + '</b> gold (you have ' + state.gold + ')</div>' +
       '<div class="card-grid">';
@@ -634,7 +729,7 @@
       html += cardHtml(c, fuseSel.indexOf(c.uid) !== -1 ? 'selected' : '', 'data-action="fuse-toggle" data-base="' + baseUid + '"');
     });
     if (!mats.length) { html += '<p class="muted">No spare cards. Clear quests or summon more.</p>'; }
-    html += '</div><p class="row"><button class="btn" data-action="fuse-confirm" data-uid="' + baseUid + '"' + (fuseSel.length ? '' : ' disabled') + '>Fuse</button>' +
+    html += '</div><p class="row"><button class="btn" data-action="fuse-confirm" data-uid="' + baseUid + '"' + (fuseSel.length ? '' : ' disabled') + '>Enhance</button>' +
       '<button class="btn secondary" data-action="card-open" data-uid="' + baseUid + '">Back</button></p>';
     openModal(html);
   }
@@ -676,6 +771,12 @@
     var res;
     switch (name) {
       case 'close': closeModal(); break;
+      case 'goto': currentTab = node.getAttribute('data-tab'); el('view').scrollTop = 0; render(); break;
+      case 'present':
+        res = G.claimPresent(state);
+        if (!res.ok) { toast(res.error); break; }
+        save(); render(); toast('Collected ' + res.gems + ' gems and ' + res.ambrosia + ' Ambrosia.');
+        break;
 
       case 'align-open': showAlignment(); break;
       case 'align-pick': {

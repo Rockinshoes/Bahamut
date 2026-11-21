@@ -55,11 +55,11 @@ test('rarities follow the original: N, HN, R, HR, SR, SSR, Legend, and summon ra
   D.RARITY_ORDER.forEach(function (r) { sum += D.RARITIES[r].rate; });
   assert(Math.abs(sum - 100) < 1e-9, 'rates sum to ' + sum);
 });
-test('there are three factions of 14 cards, each with a card at every rarity', function () {
+test('there are three factions of 22 cards, each with a card at every rarity', function () {
   assert.deepStrictEqual(Object.keys(D.FACTIONS).sort(), ['fallen', 'immortal', 'mortal']);
   D.FACTION_ORDER.forEach(function (f) {
     var mine = D.CARDS.filter(function (c) { return c.faction === f; });
-    assert.strictEqual(mine.length, 14, f + ' has ' + mine.length + ' cards');
+    assert.strictEqual(mine.length, 22, f + ' has ' + mine.length + ' cards');
     D.RARITY_ORDER.forEach(function (r) {
       assert(mine.some(function (c) { return c.rarity === r; }), f + ' has no ' + r + ' card');
     });
@@ -483,6 +483,17 @@ test('the whole game is winnable with a maxed team', function () {
     }
     assert(s.cleared[st.id], st.id + ' should be cleared');
   });
+});
+
+test('the daily present can be collected once per day', function () {
+  var s = G.newGame({ now: 0 });
+  var day1 = new Date(2026, 10, 21, 9).getTime(), later = new Date(2026, 10, 21, 22).getTime(), day2 = new Date(2026, 10, 22, 8).getTime();
+  var gems = s.gems;
+  assert(G.presentReady(s, day1));
+  assert(G.claimPresent(s, day1).ok);
+  assert.strictEqual(s.gems, gems + D.CONFIG.dailyGems); assert.strictEqual(s.items.ambrosia, D.CONFIG.dailyAmbrosia);
+  assert(!G.claimPresent(s, later).ok, 'only once per day');
+  assert(G.claimPresent(s, day2).ok, 'again the next day');
 });
 
 console.log('Card skills');

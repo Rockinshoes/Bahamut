@@ -85,7 +85,8 @@ var Game = (function () {
       attr: { stamina: 0, atk: 0 },
       attrPoints: 0,
       items: { ambrosia: 0 },
-      treasure: {},          // chapter id -> [count of piece 1, ..., count of piece 6]
+      treasure: {},
+      lastPresent: '',       // the day (YYYY-MM-DD) the daily present was last collected          // chapter id -> [count of piece 1, ..., count of piece 6]
       pulls: 0
     };
     (CFG.starterCards[state.alignment] || CFG.starterCards.mortal).forEach(function (id) {
@@ -137,6 +138,21 @@ var Game = (function () {
     state.items.ambrosia--;
     state.stamina = staminaCap(state);
     return { ok: true };
+  }
+
+  // ---------- daily present ----------
+  // Like the original's presents box on My Page: once a day, a gift waits to be collected.
+  function dayKey(now) {
+    var d = new Date(nowMs(now));
+    return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+  }
+  function presentReady(state, now) { return state.lastPresent !== dayKey(now); }
+  function claimPresent(state, now) {
+    if (!presentReady(state, now)) { return { ok: false, error: 'Today\'s present is already collected. Come back tomorrow.' }; }
+    state.lastPresent = dayKey(now);
+    state.gems += CFG.dailyGems;
+    state.items.ambrosia += CFG.dailyAmbrosia;
+    return { ok: true, gems: CFG.dailyGems, ambrosia: CFG.dailyAmbrosia };
   }
 
   function setAlignment(state, faction) {
@@ -680,6 +696,7 @@ var Game = (function () {
       var t = out.treasure[k];
       if (!Array.isArray(t) || t.length !== 6) { delete out.treasure[k]; }
     });
+    if (typeof out.lastPresent !== 'string') { out.lastPresent = ''; }
     if (!D.FACTIONS[out.alignment]) { out.alignment = null; } // old saves: the game asks for one
     out.version = 3;
     out.level = Math.max(1, Math.floor(out.level));
@@ -691,6 +708,7 @@ var Game = (function () {
     newGame: newGame, findCard: findCard, addCard: addCard,
     maxStamina: maxStamina, staminaCap: staminaCap, expToNext: expToNext, deckCostCap: deckCostCap,
     regenStamina: regenStamina, msUntilNextStamina: msUntilNextStamina,
+    presentReady: presentReady, claimPresent: claimPresent,
     spendPoint: spendPoint, useAmbrosia: useAmbrosia, setAlignment: setAlignment,
     skillPct: skillPct, skillText: skillText, skillTitle: skillTitle, applySkills: applySkills, sectionDrops: sectionDrops,
     treasureCounts: treasureCounts, treasureComplete: treasureComplete, claimTreasure: claimTreasure, stagePieces: stagePieces,

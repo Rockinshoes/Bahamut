@@ -33,7 +33,7 @@ or to the demons (Tiamat, Jormungand and Hydra were Demon cards), never to human
 
 ## Cards
 
-There are 42 cards, 14 per faction, named after public-domain gods, heroes and monsters or with generic titles.
+There are 66 cards, 22 per faction, named after public-domain gods, heroes and monsters or with generic titles.
 Rarities follow the original: **Normal, High Normal, Rare, High Rare, S Rare, SS Rare and Legend**. Most cards
 are **Attack type** (more ATK) or **Defense type** (more DEF), with a few Balanced.
 
@@ -41,6 +41,15 @@ When you start a game you pick an **alignment** and get its starter pack: **one 
 (Mortal: Flame Warden, Immortal: Halo Seraph, Fallen: Night Sorceress). You do not start with a full party;
 you build it from cards you win in quests and summons. Cards of your alignment get **+5% ATK and DEF** in battle.
 You can still use any card. (More > Change alignment switches it later.)
+
+## Screens
+
+The bottom menu follows the original: **My Page** (your home: leader card, level, stats, the daily
+present, attribute points and shortcuts), **Quest**, **Enhance** (feed cards to level one up, or sell),
+**Evolve** (cards at max level with a spare copy), **Deck** and **Summon**. My Page also has a
+**Collection** of every card in the game, showing which you have found.
+
+A **present** arrives on My Page once a day: 30 gems and 1 Ambrosia.
 
 ## How a quest works
 

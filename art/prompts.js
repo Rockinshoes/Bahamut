@@ -69,6 +69,14 @@ var SUBJECTS = {
   'flame-warden':      'A champion knight in gleaming steel armor with a flowing crimson cape, holding a flaming longsword and a star-emblazoned shield.',
   'grand-sorcerer':    'A grand sorcerer in an embroidered robe with a tall pointed hat, summoning a storm of arcane runes and lightning.',
   'achilles':          'Achilles, the legendary Greek hero, in bronze armor with a crested helmet, a long spear and a round bronze shield, mid-charge.',
+  'squire':            'A young squire in a simple steel cap and padded tunic, holding a plain shield and a short sword, eager and earnest.',
+  'crossbowman':       'A stocky crossbowman in a brigandine coat and kettle helm, aiming a heavy crossbow.',
+  'monk':              'A wandering martial monk with a shaved head and simple robes tied at the waist, in a fighting stance, wooden staff on his back.',
+  'shieldmaiden':      'A Norse shieldmaiden with braided hair, a painted round shield and a spear, standing on a rocky shore.',
+  'ranger':            'A forest ranger in a dark green cloak drawing a bow, a hunting knife at the hip, eyes sharp.',
+  'battle-cleric':     'A battle cleric in white and gold vestments over chainmail, raising a mace while holy light shines from her hand.',
+  'beowulf':           'Beowulf, the hero of the Old English epic, a powerful bearded warrior in a boar-crested helm and mail, gripping a great sword.',
+  'roland':            'Roland, the paladin of medieval French legend, in ornate plate armor, raising the shining sword Durendal and an ivory horn at his belt.',
   'siegfried':         'Siegfried, the dragon-slaying hero of Norse and Germanic legend, in heroic armor with a great sword, a slain dragon\'s scales at his feet.',
 
   // ---- Immortal (gods, angels, fairies, celestial beasts and dragons)
@@ -85,6 +93,14 @@ var SUBJECTS = {
   'halo-seraph':       'A serene seraph with three pairs of luminous white wings, a blazing halo and white-gold robes, holding a holy sword point-down.',
   'xuanwu':            'Xuanwu, the Black Tortoise of Chinese mythology: a giant celestial tortoise entwined with a serpent, glowing shell patterns.',
   'qinglong':          'Qinglong, the Azure Dragon of Chinese mythology: a long wingless serpentine sky dragon with antlers and whiskers, coiling through clouds around a glowing pearl.',
+  'pixie':             'A tiny mischievous pixie with gossamer wings and a halo, scattering glittering dust from her hands.',
+  'cherub':            'A chubby little cherub with small white wings and a golden halo, holding a tiny bow.',
+  'unicorn':           'A pure white unicorn with a spiral golden horn and a flowing silver mane, a faint halo of light.',
+  'muse':              'A Greek muse in a flowing chiton playing a golden lyre, laurel wreath in her hair, notes of light around her.',
+  'thor':              'Thor, the Norse thunder god, with a red beard and a winged helm, raising the hammer Mjolnir as lightning crackles.',
+  'athena':            'Athena, the Greek goddess of wisdom and war, in a crested helmet and golden armor with a spear, an owl on her shoulder and the aegis shield.',
+  'phoenix':           'A radiant phoenix, a great bird of fire with long tail feathers of flame, rising from its own ashes.',
+  'zeus':              'Zeus, king of the Greek gods, with a white beard and a laurel crown, hurling a thunderbolt from the clouds of Olympus.',
   'odin':              'Odin, the Norse all-father, one-eyed with a long beard and winged helmet, spear Gungnir in hand, two ravens and a radiant halo of runes.',
 
   // ---- Fallen (demons, monsters, undead and chaos dragons)
@@ -101,6 +117,14 @@ var SUBJECTS = {
   'night-sorceress':   'A demon sorceress with curling horns, bat wings and a dark red robe, conjuring a sphere of violet magic beneath the moon.',
   'medusa':            'Medusa, the gorgon of Greek myth, with a crown of living snakes for hair and a petrifying glowing gaze.',
   'tiamat':            'Tiamat, the primordial chaos dragon of Babylonian myth: a colossal winged dragon with jagged horns and spines, breathing fire.',
+  'kobold':            'A small scaly kobold with a lizard snout and a rusty scrap-metal blade, crouched in a mine tunnel.',
+  'harpy':             'A harpy with feathered wings for arms and taloned bird feet, shrieking as she dives.',
+  'banshee':           'A ghostly banshee with streaming white hair and a tattered gown, wailing, pale and translucent.',
+  'werewolf':          'A snarling werewolf mid-transformation under the full moon, claws out, fur bristling.',
+  'lich':              'A lich, a skeletal sorcerer king in rotting royal robes and a crown, holding a glowing phylactery.',
+  'cerberus':          'Cerberus, the three-headed hound guarding the gates of the underworld, each head snarling with fire.',
+  'jormungand':        'Jormungand, the vast world serpent of Norse myth, a colossal sea dragon rising from stormy waves.',
+  'beelzebub':         'Beelzebub, a demon lord with insect-like wings and a crown of horns, enthroned amid swarms of flies and hellfire.',
   'asmodeus':          'Asmodeus, a demon king in black spiked armor with a crown of horns, vast bat wings and a burning greatsword, on a throne of shadows.'
 };
 
@@ -120,6 +144,16 @@ var ENEMY_SUBJECTS = {
   'Sanctum Guardian':   'A winged golden guardian knight of a celestial temple with a halo and a tower shield.',
   'Sacred Lion':        'A white-gold sacred lion with feathered wings and a halo of light.',
   'Oracle':             'A blindfolded oracle priestess in white robes with a halo, glowing visions around her.',
+  'Marsh Harpy':        'A bedraggled harpy perched on a dead tree in a foggy swamp.',
+  'Bog Werewolf':       'A mud-caked werewolf prowling through swamp reeds.',
+  'Drowned Banshee':    'A drowned banshee rising from black water, hair dripping.',
+  'Mire Ghoul':         'A hulking ghoul draped in swamp weeds, dragging a rusted chain.',
+  'Hydra':              'The Hydra, a many-headed serpent dragon of Greek myth, rising from a dark marsh.',
+  'Citadel Guard':      'A heavily armored citadel guard with a halberd at an iron gate.',
+  'Crossbow Sentry':    'A crossbow sentry on a castle wall walkway, bolt loaded.',
+  'War Mage':           'A stern war mage in a soldier\'s coat, conjuring fire.',
+  'Pike Captain':       'A pike captain in half-plate leading a formation, pike lowered.',
+  'Iron Warlord':       'A towering human warlord in blackened iron armor with a great axe, on a fortress throne.',
   'Seraph of Judgment': 'A towering seraph of judgment with six radiant wings and a blazing sword, stern and terrible.'
 };
 

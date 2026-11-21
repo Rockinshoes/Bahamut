@@ -84,6 +84,14 @@ var GameData = (function () {
     ['grand-sorcerer',    'Grand Sorcerer',    'mortal',   'SR',  'atk', 'mage',    'light', 'Arcane Storm',       'hit',   'def',  'all'],
     ['achilles',          'Achilles',          'mortal',   'SSR', 'atk', 'lancer',  'fire',  'Wrath of Achilles',  'boost', 'atk',  'mortal'],
     ['siegfried',         'Siegfried',         'mortal',   'L',   'bal', 'warrior', 'light', 'Dragonslayer',       'boost', 'both', 'all'],
+    ['squire',            'Squire',            'mortal',   'N',   'def', 'knight',  'light', 'Steadfast',          'boost', 'def',  'mortal'],
+    ['crossbowman',       'Crossbowman',       'mortal',   'HN',  'atk', 'archer',  'fire',  'Iron Bolt',          'hit',   'def',  'all'],
+    ['monk',              'Wandering Monk',    'mortal',   'HN',  'def', 'warrior', 'wind',  'Iron Body',          'boost', 'def',  'all'],
+    ['shieldmaiden',      'Shieldmaiden',      'mortal',   'R',   'def', 'lancer',  'water', 'Linked Shields',     'boost', 'def',  'mortal'],
+    ['ranger',            'Ranger',            'mortal',   'R',   'atk', 'archer',  'wind',  'Hunter\'s Mark',     'hit',   'def',  'fallen'],
+    ['battle-cleric',     'Battle Cleric',     'mortal',   'HR',  'bal', 'mage',    'light', 'Benediction',        'boost', 'both', 'mortal'],
+    ['beowulf',           'Beowulf',           'mortal',   'SR',  'atk', 'warrior', 'fire',  'Grendel\'s Bane',    'boost', 'atk',  'mortal'],
+    ['roland',            'Roland',            'mortal',   'SSR', 'bal', 'knight',  'light', 'Durendal',           'hit',   'def',  'all'],
 
     // ---- Immortal: gods, angels, fairies, celestial beasts and dragons
     ['sylph',             'Sylph',             'immortal', 'N',   'atk', 'sprite',  'wind',  'Gust',               'boost', 'atk',  'immortal'],
@@ -100,6 +108,14 @@ var GameData = (function () {
     ['xuanwu',            'Xuanwu',            'immortal', 'SR',  'def', 'beast',   'water', 'Black Tortoise Shell', 'boost', 'def', 'all'],
     ['qinglong',          'Qinglong',          'immortal', 'SSR', 'atk', 'serpent', 'water', 'Azure Tempest',      'boost', 'atk',  'immortal'],
     ['odin',              'Odin',              'immortal', 'L',   'bal', 'lancer',  'light', 'Gungnir',            'boost', 'both', 'all'],
+    ['pixie',             'Pixie',             'immortal', 'N',   'atk', 'sprite',  'wind',  'Twinkle Dust',       'hit',   'atk',  'all'],
+    ['cherub',            'Cherub',            'immortal', 'N',   'def', 'sprite',  'light', 'Little Grace',       'boost', 'def',  'immortal'],
+    ['unicorn',           'Unicorn',           'immortal', 'HN',  'bal', 'beast',   'light', 'Pure Horn',          'boost', 'both', 'all'],
+    ['muse',              'Muse',              'immortal', 'R',   'atk', 'mage',    'wind',  'Inspiration',        'boost', 'atk',  'all'],
+    ['thor',              'Thor',              'immortal', 'HR',  'atk', 'warrior', 'water', 'Mjolnir',            'hit',   'def',  'all'],
+    ['athena',            'Athena',            'immortal', 'SR',  'def', 'lancer',  'light', 'Aegis of Wisdom',    'boost', 'def',  'immortal'],
+    ['phoenix',           'Phoenix',           'immortal', 'SSR', 'atk', 'beast',   'fire',  'Rebirth Flame',      'boost', 'atk',  'immortal'],
+    ['zeus',              'Zeus',              'immortal', 'L',   'atk', 'mage',    'light', 'Thunderbolt',        'hit',   'def',  'all'],
 
     // ---- Fallen: demons, monsters, undead and chaos dragons
     ['goblin',            'Goblin',            'fallen',   'N',   'atk', 'sprite',  'dark',  'Ambush',             'boost', 'atk',  'fallen'],
@@ -115,7 +131,15 @@ var GameData = (function () {
     ['night-sorceress',   'Night Sorceress',   'fallen',   'SR',  'bal', 'mage',    'dark',  'Shadow Hex',         'boost', 'both', 'fallen'],
     ['medusa',            'Medusa',            'fallen',   'SR',  'atk', 'mage',    'water', 'Stone Gaze',         'hit',   'def',  'all'],
     ['tiamat',            'Tiamat',            'fallen',   'SSR', 'atk', 'dragon',  'fire',  'Primordial Chaos',   'boost', 'atk',  'fallen'],
-    ['asmodeus',          'Asmodeus',          'fallen',   'L',   'bal', 'tyrant',  'dark',  'Infernal Crown',     'boost', 'both', 'all']
+    ['asmodeus',          'Asmodeus',          'fallen',   'L',   'bal', 'tyrant',  'dark',  'Infernal Crown',     'boost', 'both', 'all'],
+    ['kobold',            'Kobold',            'fallen',   'N',   'atk', 'sprite',  'fire',  'Scrap Blade',        'boost', 'atk',  'fallen'],
+    ['harpy',             'Harpy',             'fallen',   'N',   'atk', 'sprite',  'wind',  'Shriek',             'hit',   'atk',  'all'],
+    ['banshee',           'Banshee',           'fallen',   'HN',  'def', 'mage',    'dark',  'Mourning Wail',      'hit',   'atk',  'all'],
+    ['werewolf',          'Werewolf',          'fallen',   'R',   'atk', 'beast',   'dark',  'Feral Howl',         'boost', 'atk',  'fallen'],
+    ['lich',              'Lich',              'fallen',   'HR',  'bal', 'mage',    'dark',  'Phylactery',         'boost', 'both', 'fallen'],
+    ['cerberus',          'Cerberus',          'fallen',   'SR',  'atk', 'beast',   'fire',  'Three Heads',        'hit',   'def',  'all'],
+    ['jormungand',        'Jormungand',        'fallen',   'SSR', 'def', 'dragon',  'water', 'World Coil',         'boost', 'def',  'all'],
+    ['beelzebub',         'Beelzebub',         'fallen',   'L',   'atk', 'tyrant',  'fire',  'Lord of Flies',      'hit',   'both', 'all']
   ];
 
   var CARDS = CARD_LIST.map(function (c) {
@@ -185,7 +209,25 @@ var GameData = (function () {
               ['greatsword-maiden', 'hermes', 'minotaur'], ['berserker', 'pegasus', 'chimera']],
       bossDrops: ['grand-sorcerer', 'xuanwu', 'medusa'],
       treasure: { name: 'Regalia of the Sanctum', reward: 'SSR',
-        pieces: ['Cloud Key', 'Guardian\'s Plume', 'Lion\'s Mane', 'Oracle\'s Eye', 'Judgment Scale', 'Sanctum Seal'] } }
+        pieces: ['Cloud Key', 'Guardian\'s Plume', 'Lion\'s Mane', 'Oracle\'s Eye', 'Judgment Scale', 'Sanctum Seal'] } },
+    { id: 4, name: 'The Shadow Marsh', faction: 'fallen', look: 'dark',
+      enemies: [{ name: 'Marsh Harpy', style: 'sprite' }, { name: 'Bog Werewolf', style: 'beast' },
+                { name: 'Drowned Banshee', style: 'mage' }, { name: 'Mire Ghoul', style: 'warrior' }],
+      boss: { name: 'Hydra', style: 'dragon' },
+      drops: [['squire', 'pixie', 'kobold'], ['crossbowman', 'cherub', 'harpy'],
+              ['monk', 'unicorn', 'banshee'], ['shieldmaiden', 'muse', 'werewolf']],
+      bossDrops: ['battle-cleric', 'thor', 'lich'],
+      treasure: { name: 'Relics of the Marsh', reward: 'SR',
+        pieces: ['Harpy Talon', 'Wolf Pelt', 'Banshee\'s Veil', 'Bog Lantern', 'Hydra Fang', 'Marsh Seal'] } },
+    { id: 5, name: 'The Iron Citadel', faction: 'mortal', look: 'fire',
+      enemies: [{ name: 'Citadel Guard', style: 'knight' }, { name: 'Crossbow Sentry', style: 'archer' },
+                { name: 'War Mage', style: 'mage' }, { name: 'Pike Captain', style: 'lancer' }],
+      boss: { name: 'Iron Warlord', style: 'warrior' },
+      drops: [['ranger', 'muse', 'werewolf'], ['battle-cleric', 'thor', 'lich'],
+              ['high-lancer', 'freyja', 'vampire-countess'], ['greatsword-maiden', 'hermes', 'minotaur']],
+      bossDrops: ['beowulf', 'athena', 'cerberus'],
+      treasure: { name: 'Arms of the Citadel', reward: 'SSR',
+        pieces: ['Guard\'s Badge', 'Sentry Quiver', 'Mage\'s Codex', 'Captain\'s Pike', 'Warlord\'s Helm', 'Citadel Seal'] } }
   ];
   var STAGES_PER_CHAPTER = 5;
 
@@ -203,6 +245,8 @@ var GameData = (function () {
     evolveGoldBase: 500,             // multiplied by (current evo + 1)
     firstClearGems: 30,
     firstClearBossGems: 100,
+    dailyGems: 30,                   // the daily present on My Page
+    dailyAmbrosia: 1,
     battleMaxRounds: 40,
     damagePerAtk: 0.2,               // each hit deals ATK x 0.2 (+/-10%) to the target's DEF
     expPerStamina: 1,                // quests give exp equal to the stamina spent, like the original
